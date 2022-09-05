@@ -1,5 +1,60 @@
 <html>
-<body>
-<a href="https://github.com/thisisjosh">Josh's Github</>
-</body>
+    <head>
+    <title>Optimum Unknown</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;400&display=swap" rel="stylesheet">
+    <style>
+        a:link { text-decoration: none; color: blue; }
+        a:visited { text-decoration: none; color: blue; }
+        a:hover { text-decoration:none; font-weight: bold; color: blue;}
+        a:active { text-decoration: none; }
+
+        body {
+            background: linear-gradient(45deg, #ffee00, #00ff88);
+        }
+
+        #eyes {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            background: rgba(255, 255, 255, 0.10);
+        }
+
+        #toc {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.50);
+            padding: 50px;
+            font: x-large 'Roboto', sans-serif;
+        }
+
+        #footer {
+            position: fixed;
+            right: 25px;
+            bottom: 25px;
+            background: rgba(255, 255, 255, 0.75);
+            padding: 5px;
+            font: x-large 'Roboto', sans-serif;
+        }
+    </style>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZBYRMJ7RWH"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-ZBYRMJ7RWH');
+    </script>
+    </head>
+    <body>
+    <div id="eyes"><img src="me-eyes.svg" width="50px" alt="Home"></div>
+    <div id="toc">
+        I'll be using this site to share some of my personal projects. Enjoy!
+        <ul>
+            <li><a href="goodusb.html">Good USB</a> A DIY hardware authenticator.</li>
+        </ul>
+    </div>
+    <div id="footer">
+       <a href="mailto:josh@optimumunknown.com" target="_blank">josh@optimumunknown.com</a> | <a href="https://tinyletter.com/optimumunknown" target="_blank">Subscribe</a>
+    </div>
+    </body>
 </html>

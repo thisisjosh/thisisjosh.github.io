@@ -1,0 +1,113 @@
+<html>
+    <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Good USB</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;400&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font: 18px 'Roboto', sans-serif;
+            line-height: 1.6;
+            margin:30px auto; max-width:840px; line-height:1.6; padding:0 10px;
+        }
+        
+        h1,h2,h3{ line-height:1.2 }
+
+        a:link { text-decoration: none; color: blue; }
+        a:visited { text-decoration: none; color: blue; }
+        a:hover { text-decoration:none; font-weight: bold; color: blue;}
+        a:active { text-decoration: none; }
+
+        #menu {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            background: rgba(255, 255, 255, 0.75);
+        }
+
+        .responsive-youtube {overflow:hidden; padding-bottom:56.25%; position:relative; height:0;}
+        .responsive-youtube iframe {left:0; top:0; height:100%; width:100%; position:absolute;}
+    </style>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZBYRMJ7RWH"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-ZBYRMJ7RWH');
+    </script>
+    </head>
+    <body>
+        <div id="menu"><a href="index.html"><img src="me-eyes.svg" width="50px" alt="Home"></a></div>
+<h1>Good USB</h1>
+<h2>A DIY hardware two-factor authenticator.</h2>
+<p>
+Using two-factor authentication is a great way to add extra protection to your online accounts.
+</p> 
+<h3>What is two-factor authentication (2FA)?</h3>
+<p>
+I'll explain real quick if you don't know what I am talking about. Normally when you log into a website, you enter your username and password, and you are done. Your password is a single factor of authentication. A lot of web sites let you add a second step of authentication for added security. A popular form is a time-based code on your phone that changes every 30 seconds.  You must type in this code when logging in online. Once your phone is registered with the website, it will know how to generate the code. The code is always changing so even if someone watches you type it in, it will be of no use to them since the code expires 30 seconds later.
+</p>
+<h3>What is the problem?</h3>
+<p>
+Looking up these codes on your phone and typing them in every time you access an important online account is a pain.  There is always some time pressure to locate the code and type it in before it expires. It is easy to mistype the code. When you mistype you need to start all over.
+</p>
+<h3>How do I solve this problem?</h3>
+<p>
+You could use a software-based authenticator on your computer like <a href="https://authy.com">Authy</a> or a hardware authenticator like a <a href="https://amzn.to/39entvd">YubiKey</a>.
+</p>
+<h4>Software Authenticators on your Computer</h4>
+<p>
+If you are thinking, "I use Authy on my computer to paste in my 2FA codes. It is no hassle at all."
+</p>
+<p>
+The problem with software-based authenticators on your computer is that the secret seed codes are stored inside your computer. If your computer falls into the wrong hands then so do your 2FA codes. <i>(I still use Authy for most of my accounts.)</i>
+</p>
+<h4>External Hardware Authenticators</h4>
+<p>
+It is much safer to keep your 2FA secrets physically separated from your computer in your phone or a specialized hardware device such as a YubiKey.
+However, a YubiKey costs around <b>50 bucks</b>. Instead, I'm going to show you how to make your own hardware authenticator for closer to <b>$5</b> using an Arduino.
+</p>
+<h3>How do I make my own hardware authenticator?</h3>
+<p>
+Ok, let's get started. First, you will need an Arduino that can pretend to be a keyboard connected to your computer.  Check out the <a href="https://www.arduino.cc/reference/en/language/functions/usb/keyboard/">Arduino keyboard library docs</a> for compatible units. I have had good luck with the Arduino Leanardo, SS Mico, and BadUSB. I like the BadUSB since it is a nice looking USB stick. These are frequently used for nefarious purposes, but instead, we are using them for good and that is why I call this project <b>Good USB</b>. The Lily GO BadUSB looks really nice, but has no button.
+<img width="840" src="arduinos-that-work.JPG">
+</p>
+<p>
+I bought all of mine on <a href="https://www.aliexpress.com/">AliExpress</a>. There are all kinds of form factors. Search for ATMEGA32U4 Arduino. Prices have gone up since I first made this project in 2017, but there are still some good deals on this hardware and chances are you already have a compatible unit if you are into Arduinos.
+</p>
+<p>
+The Arduino works with a <a href="https://github.com/thisisjosh/Goodusb2fa-POC/tree/main/electron-app">companion app</a> that runs on your computer. The companion app is what you use to tell the Arduino which of your accounts to type the code for.
+Optionally, you can add a button to your Arduino that will type the 2FA code when you press the button. Without the button, the Arduino will type the code 2 seconds after you select the account in the companion app.  Wire it up following the Arduino <a href="https://www.arduino.cc/en/Tutorial/BuiltInExamples/Button">button page</a>.
+</p>
+<h2>Demo</h2>
+<div class="responsive-youtube"> 
+<iframe src="https://www.youtube.com/embed/6b-HfaJbiQg" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+</div>
+<p>
+Let's see it in action. Here I am browsing to my ProtonMail account and I am typing in my username and password. My ProtonMail account is asking for a 2FA code, so I'm clicking on the ProtoMail account button in the companion app. The app then sent a message to the Arduino telling it the current system time and to use my codes for my ProtonMail account. I click back to the 2FA field in ProtonMail in anticipation of the Arduino typing the code. Next, I press the button on my Arduino. The Arduino computes the 2FA code using the current time and secret seed code stored within it. Then it pretends to be a keyboard and types the 2FA code into my computer. I'm in!
+</p>
+<p>
+All <a href="https://github.com/thisisjosh/Goodusb2fa-POC">the code</a> is on Github.
+</p>
+<h2>Disclaimer</h2>
+<p>
+This project right now is a <b>proof of concept</b>. There is a lot that can be done to make it more secure and easier to use. There are probably some easy attacks that could extract the secret seed codes from the Arduino.  It also only supports <a href="https://datatracker.ietf.org/doc/html/rfc6238">one protocol</a> at the moment.
+</p>
+
+<h2>Caveat</h2>
+<p>
+Registering new services on the Arduino is a bit technical right now, but this can be improved in the future. I'll write up a guide if there is interest.
+</p>
+<h2>Acknowledgements</h2>
+<ul>
+    <li><a href="https://www.arduino.cc/reference/en/libraries/totp-library/">The Arduino TOTP</a> library is the real brain of this project.</li>
+    <li><a href="https://www.arduino.cc">Arduino</a></li>
+    <li><a href="https://www.electronjs.org/">Electron</a></li>
+    <li><a href="https://hackaday.com/2022/06/18/build-your-own-two-factor-authenticator-with-good-usb/">Hackaday</a> Thanks for sharing!</li>
+</ul>
+
+        </div>
+    </body>
+</html>
