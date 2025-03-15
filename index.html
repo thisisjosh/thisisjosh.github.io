@@ -5,37 +5,38 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;400&display=swap" rel="stylesheet">
     <style>
+        body {
+            font: 18px 'Roboto', sans-serif;
+            line-height: 1.6;
+            margin:30px auto; max-width:840px; line-height:1.6; padding:0 10px;
+        }
+        
+        h1,h2,h3{ line-height:1.2 }
+
         a:link { text-decoration: none; color: blue; }
         a:visited { text-decoration: none; color: blue; }
         a:hover { text-decoration:none; font-weight: bold; color: blue;}
         a:active { text-decoration: none; }
 
-        body {
-            background: linear-gradient(45deg, #ffee00, #00ff88);
-        }
-
-        #eyes {
+        #menu {
             position: absolute;
             top: 25px;
             right: 25px;
-            background: rgba(255, 255, 255, 0.10);
-        }
-
-        #toc {
-            display: inline-block;
-            background: rgba(255, 255, 255, 0.50);
-            padding: 50px;
-            font: large 'Roboto', sans-serif;
+            background: rgba(255, 255, 255, 0.75);
         }
 
         #footer {
             position: fixed;
-            right: 25px;
+            left: 50%;
             bottom: 25px;
+            transform: translateX(-50%);
             background: rgba(255, 255, 255, 0.75);
             padding: 5px;
             font: small 'Roboto', sans-serif;
         }
+
+        .responsive-youtube {overflow:hidden; padding-bottom:56.25%; position:relative; height:0;}
+        .responsive-youtube iframe {left:0; top:0; height:100%; width:100%; position:absolute;}
     </style>
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZBYRMJ7RWH"></script>
     <script>
@@ -46,17 +47,17 @@
     </script>
     </head>
     <body>
-    <div id="eyes"><img src="me-eyes.svg" width="50px" alt="Home"></div>
+        <div id="menu"><img src="me-eyes.svg" width="50px" alt="Home"></div>
     <div id="toc">
         <h1>Projects</h1>
         <ul>
-            <li><a href="goodusb.html">Good USB</a> An Arduino DIY hardware authenticator.</li>
-            <li><a href="https://github.com/thisisjosh/HungryCat">Hungry Cat</a> An Arduino DIY pet food feeder.</li>
-            <li><a href="https://www.fartbymail.com">Fart By Mail</a> Sending farts in the mail for over 10 years. asp.net</li>
-            <li><a href="https://index.rodeo">Index.Rodeo</a> A service to assist authors in making book indexes. node.js</li>
-            <li><a href="https://ethos.optimumunknown.com/">Ethos</a> Random mindset reminders. This was made as an alternative to mindless scrolling when I impulsively pick up my phone. The backend is a CloudFlare Worker and a Google Sheet. The first cold page load will be slow as the worker starts up and fetches the sheet.</li>
-            <li><a href="https://www.optimumunknown.com/slidepuzzle/play.htm">Slide Puzzle</a> A simple browser based classic 15 puzzle. I played the Mac OS System 7 version all the time. There are <a href="https://www.youtube.com/watch?v=YI1WqYKHi78">unsolvable starting configurations</a> that I only discovered after randomly arranging the numbers if my first implementation.</li>
-            <li><a href="https://www.optimumunknown.com/simonjs/play.htm">Simon</a> A simple browser based Simon memory game. Another recreation of a classic game from my childhood.</li>
+            <li><a href="goodusb.html">Good USB</a> DIY hardware authenticator.</li>
+            <li><a href="https://github.com/thisisjosh/HungryCat">Hungry Cat</a> Pet food feeder.</li>
+            <li><a href="https://www.fartbymail.com">Fart By Mail</a> Sending farts in the mail for over 10 years.</li>
+            <li><a href="https://index.rodeo">Index.Rodeo</a> Assists authors in making book indexes.</li>
+            <li><a href="https://ethos.optimumunknown.com/">Ethos</a> Random mindset reminders.
+            <li><a href="https://www.optimumunknown.com/slidepuzzle/play.htm">Slide Puzzle</a> Classic 15 puzzle. I played the old <a href="https://folklore.org/Puzzle.html">Mac version</a> all the time. There are <a href="https://www.youtube.com/watch?v=YI1WqYKHi78">unsolvable starting configurations</a> that I only discovered after randomly arranging the numbers if my first implementation.</li>
+            <li><a href="https://www.optimumunknown.com/simonjs/play.htm">Simon</a> Another recreation of a <a href="https://en.wikipedia.org/wiki/Simon_(game)">classic game</a> from my childhood.</li>
         </ul>
     </div>
     <div id="footer">
