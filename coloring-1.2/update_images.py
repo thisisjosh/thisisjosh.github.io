@@ -3,16 +3,16 @@ import re
 
 # --- Configuration ---
 IMAGES_DIR = 'images'
-SCRIPT_FILE = 'script.js'
+SCRIPT_FILE = 'app.js'
 # -------------------
 
 def get_image_paths(directory):
-    """Scans the directory for .svg files and returns a list of formatted paths."""
+    """Scans the directory for images files and returns a list of formatted paths."""
     if not os.path.isdir(directory):
         print(f"Error: Directory '{directory}' not found.")
         return None
     
-    files = [f for f in os.listdir(directory) if f.lower().endswith('.svg')]
+    files = [f for f in os.listdir(directory)]
     # Format for JavaScript, using forward slashes for web compatibility
     return [f"{directory}/{file}".replace('\\', '/') for file in sorted(files)]
 
