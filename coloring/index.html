@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coloring Book</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div id="toolbar">
+            <input type="color" id="colorPicker" value="#ff0000" title="Select Color">
+            <button id="clearBtn" title="Clear">🗑️</button>
+            <button id="libraryBtn" title="Library">📚</button>
+        </div>
+        <div id="canvas-container">
+            <canvas id="coloringCanvas"></canvas>
+        </div>
+    </div>
+
+    <div id="libraryModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Select an Image</h2>
+            <div id="imageLibrary"></div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

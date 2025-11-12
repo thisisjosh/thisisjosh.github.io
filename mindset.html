@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inspirational Quote</title>
+    <style>
+        :root {
+            --font-size: 4vw; /* Responsive font size */
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f0f0;
+            font-family: 'Arial', sans-serif;
+        }
+
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            width: 100%;
+        }
+
+        .quote-container {
+            text-align: center;
+            max-width: 80%;
+            font-size: var(--font-size);
+        }
+
+        .emoji-container {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            padding: 10px 0;
+        }
+
+        .emoji-link {
+            margin: 0 10px;
+            font-size: 2em;
+            text-decoration: none;
+            color: #333;
+        }
+
+        @media (max-width: 600px) {
+            :root {
+                --font-size: 6vw; /* Adjust font size for smaller screens */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="quote-container">
+            "The only way to do great work is to love what you do." - Steve Jobs
+        </div>
+        <div class="emoji-container">
+            <a href="#" class="emoji-link">👍</a>
+            <a href="#" class="emoji-link">👎</a>
+            <a href="#" class="emoji-link">🧠</a>
+            <a href="#" class="emoji-link">➕</a>
+        </div>
+    </div>
+</body>
+</html>

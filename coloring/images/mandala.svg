@@ -1,0 +1,6 @@
+<svg viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg">
+    <path fill="white" stroke="black" stroke-width="2" d="M250,50 A200,200 0 1 1 250,450 A200,200 0 1 1 250,50 Z"></path>
+    <path fill="white" stroke="black" stroke-width="2" d="M250,100 A150,150 0 1 1 250,400 A150,150 0 1 1 250,100 Z"></path>
+    <path fill="white" stroke="black" stroke-width="2" d="M250,150 A100,100 0 1 1 250,350 A100,100 0 1 1 250,150 Z"></path>
+    <path fill="white" stroke="black" stroke-width="2" d="M250,200 A50,50 0 1 1 250,300 A50,50 0 1 1 250,200 Z"></path>
+</svg>
