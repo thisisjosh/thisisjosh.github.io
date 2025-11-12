@@ -9,10 +9,10 @@
 <body>
     <div class="container">
         <div id="toolbar">
+            <button id="libraryBtn" title="Library">📚</button>
             <input type="color" id="colorPicker" value="#ff0000" title="Select Color">
             <button id="undoBtn" title="Undo">↶</button>
             <button id="clearBtn" title="Clear">🗑️</button>
-            <button id="libraryBtn" title="Library">📚</button>
         </div>
         <div id="canvas-container">
             <canvas id="coloringCanvas"></canvas>
@@ -26,6 +26,43 @@
             <div id="imageLibrary"></div>
         </div>
     </div>
-    <script src="script.js"></script>
+
+    <div id="tutorialOverlay" class="tutorial-overlay">
+        <div class="tutorial-content">
+            <h1>Welcome to Optimum Unknown Coloring!</h1>
+            <div class="tutorial-section">
+                <span class="tutorial-icon">📚</span>
+                <div>
+                    <strong>Library</strong><br>
+                    Choose a new image to color
+                </div>
+            </div>
+            <div class="tutorial-section">
+                <span class="tutorial-icon">🎨</span>
+                <div>
+                    <strong>Color Picker</strong><br>
+                    Click to choose your color
+                </div>
+            </div>
+            <div class="tutorial-section">
+                <span class="tutorial-icon">↶</span>
+                <div>
+                    <strong>Undo</strong><br>
+                    Undo your last fill
+                </div>
+            </div>
+            <div class="tutorial-section">
+                <span class="tutorial-icon">🗑️</span>
+                <div>
+                    <strong>Clear</strong><br>
+                    Clear all colors and start over
+                </div>
+            </div>
+            <p class="tutorial-instruction">Click the 📚 Library button to start coloring!</p>
+            <button id="tutorialOkBtn" class="tutorial-ok-btn">OK</button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
 </body>
 </html>

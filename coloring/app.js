@@ -15,6 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Tolerance for flood-fill color matching (higher -> include more anti-aliased pixels)
     const FILL_TOLERANCE = 60;
     const FILL_TOLERANCE_SQ = FILL_TOLERANCE * FILL_TOLERANCE;
+    // Resolution multiplier to reduce aliasing when converting vector to raster
+    const RESOLUTION_MULTIPLIER = 2;
 
     // Helper: calculate aspect-ratio-preserving dimensions to fit within bounds
     function fitWithinBounds(imgWidth, imgHeight, boundsWidth, boundsHeight) {
@@ -68,6 +70,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Display tutorial on first load
+    function displayTutorial() {
+        const tutorialOverlay = document.getElementById('tutorialOverlay');
+        tutorialOverlay.classList.remove('hidden');
+    }
+
+    // Dismiss tutorial
+    function dismissTutorial() {
+        const tutorialOverlay = document.getElementById('tutorialOverlay');
+        tutorialOverlay.classList.add('hidden');
+    }
+
     // Load and restore saved progress for an image
     async function loadImage(src) {
         currentImage = src;
@@ -76,6 +90,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // Check if there's saved progress for this image
         const saveData = getSaveData(src);
         
+        // If we have saved progress, just display it directly with proper scaling
+        if (saveData && saveData.data) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const img = new Image();
+            img.onload = () => {
+                // Scale and center the saved image to fit the canvas
+                const dims = fitWithinBounds(img.width, img.height, canvas.width, canvas.height);
+                ctx.drawImage(img, dims.x, dims.y, dims.w, dims.h);
+            };
+            img.src = saveData.data;
+            return;
+        }
+        
+        // Otherwise, load and draw the base image
         try {
             const response = await fetch(src);
             if (!response.ok) {
@@ -86,38 +114,23 @@ document.addEventListener('DOMContentLoaded', () => {
             // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Try to use canvg (v3 exposes a global `Canvg`, older builds may expose `canvg.Canvg`).
-            const CanvgClass = (typeof Canvg !== 'undefined') ? Canvg : (typeof canvg !== 'undefined' && canvg.Canvg) ? canvg.Canvg : null;
-            if (CanvgClass) {
-                const v = await CanvgClass.fromString(ctx, svgText);
-                await v.render();
-            } else {
-                // Graceful fallback: draw the SVG via an <img> using a data URL.
-                // This avoids throwing and works in browsers without canvg.
-                console.warn('Canvg not found — falling back to drawing SVG via <img>. For better results include canvg.');
-                await new Promise((resolve, reject) => {
-                    const img = new Image();
-                    // Important: set crossOrigin if your SVGs need it. For local files this is typically not needed.
-                    img.onload = () => {
-                        try {
-                            ctx.clearRect(0, 0, canvas.width, canvas.height);
-                            // Preserve aspect ratio and center the image
-                            const dims = fitWithinBounds(img.width, img.height, canvas.width, canvas.height);
-                            ctx.drawImage(img, dims.x, dims.y, dims.w, dims.h);
-                            resolve();
-                        } catch (err) {
-                            reject(err);
-                        }
-                    };
-                    img.onerror = (e) => reject(new Error('SVG fallback image load failed'));
-                    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgText);
-                });
-            }
-
-            // If there's saved progress, overlay it on the canvas
-            if (saveData && saveData.data) {
-                overlayImageData(saveData.data);
-            }
+            // Draw SVG via an <img> using a data URL
+            await new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    try {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        // Preserve aspect ratio and center the image
+                        const dims = fitWithinBounds(img.width, img.height, canvas.width, canvas.height);
+                        ctx.drawImage(img, dims.x, dims.y, dims.w, dims.h);
+                        resolve();
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+                img.onerror = (e) => reject(new Error('SVG image load failed'));
+                img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgText);
+            });
 
         } catch (error) {
             console.error('Error loading image:', error);
@@ -239,8 +252,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     canvas.addEventListener('click', (e) => {
         const rect = canvas.getBoundingClientRect();
-        const x = Math.floor(e.clientX - rect.left);
-        const y = Math.floor(e.clientY - rect.top);
+        const x = Math.floor((e.clientX - rect.left) * RESOLUTION_MULTIPLIER);
+        const y = Math.floor((e.clientY - rect.top) * RESOLUTION_MULTIPLIER);
         
         // Save state before fill for undo
         pushUndoState();
@@ -292,15 +305,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return dataUrl ? { data: dataUrl } : null;
     }
 
-    // Overlay saved image data onto the current canvas
-    function overlayImageData(dataUrl) {
-        const img = new Image();
-        img.onload = () => {
-            ctx.drawImage(img, 0, 0);
-        };
-        img.src = dataUrl;
-    }
-
     clearBtn.addEventListener('click', () => {
         if (currentImage) {
             // Remove saved progress for this image and reload it fresh
@@ -308,10 +312,6 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.removeItem(key);
             loadImage(currentImage);
         }
-    });
-
-    libraryBtn.addEventListener('click', () => {
-        modal.style.display = 'block';
     });
 
     closeBtn.addEventListener('click', () => {
@@ -324,11 +324,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Tutorial OK button event listener
+    const tutorialOkBtn = document.getElementById('tutorialOkBtn');
+    tutorialOkBtn.addEventListener('click', dismissTutorial);
+    
+    // Library button - dismiss tutorial and open library
+    libraryBtn.addEventListener('click', () => {
+        dismissTutorial();
+        modal.style.display = 'block';
+    });
+
     // Set canvas size
     const canvasContainer = document.getElementById('canvas-container');
     function resizeCanvas() {
-        canvas.width = canvasContainer.clientWidth;
-        canvas.height = canvasContainer.clientHeight;
+        // Use higher resolution internally to reduce aliasing
+        canvas.width = canvasContainer.clientWidth * RESOLUTION_MULTIPLIER;
+        canvas.height = canvasContainer.clientHeight * RESOLUTION_MULTIPLIER;
+        // Scale the canvas display back down to actual window size
+        canvas.style.width = canvasContainer.clientWidth + 'px';
+        canvas.style.height = canvasContainer.clientHeight + 'px';
         if (currentImage) {
             loadImage(currentImage);
         }
@@ -340,5 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (images.length > 0) {
         // initial load
         resizeCanvas();
+        // Show tutorial on first load
+        displayTutorial();
     }
 });
