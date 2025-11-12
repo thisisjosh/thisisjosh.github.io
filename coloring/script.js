@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('coloringCanvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const colorPicker = document.getElementById('colorPicker');
-    const loadBtn = document.getElementById('loadBtn');
+    const undoBtn = document.getElementById('undoBtn');
     const clearBtn = document.getElementById('clearBtn');
     const libraryBtn = document.getElementById('libraryBtn');
     const modal = document.getElementById('libraryModal');
@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let selectedColor = colorPicker.value;
     let currentImage = '';
+    let undoStack = []; // Stack of canvas states for undo
     // Tolerance for flood-fill color matching (higher -> include more anti-aliased pixels)
     const FILL_TOLERANCE = 60;
     const FILL_TOLERANCE_SQ = FILL_TOLERANCE * FILL_TOLERANCE;
@@ -70,6 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load and restore saved progress for an image
     async function loadImage(src) {
         currentImage = src;
+        undoStack = []; // Clear undo stack when loading a new image
         
         // Check if there's saved progress for this image
         const saveData = getSaveData(src);
@@ -239,12 +241,43 @@ document.addEventListener('DOMContentLoaded', () => {
         const rect = canvas.getBoundingClientRect();
         const x = Math.floor(e.clientX - rect.left);
         const y = Math.floor(e.clientY - rect.top);
+        
+        // Save state before fill for undo
+        pushUndoState();
+        
         floodFill(x, y, selectedColor);
         autoSave();
     });
 
     colorPicker.addEventListener('input', (e) => {
         selectedColor = e.target.value;
+    });
+
+    // Undo stack management
+    function pushUndoState() {
+        // Save current canvas state
+        undoStack.push(canvas.toDataURL());
+        // Limit undo stack to 50 states to avoid memory issues
+        if (undoStack.length > 50) {
+            undoStack.shift();
+        }
+    }
+
+    function popUndoState() {
+        if (undoStack.length === 0) return false;
+        const previousState = undoStack.pop();
+        const img = new Image();
+        img.onload = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+            autoSave();
+        };
+        img.src = previousState;
+        return true;
+    }
+
+    undoBtn.addEventListener('click', () => {
+        popUndoState();
     });
 
     function autoSave() {
