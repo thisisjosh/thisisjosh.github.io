@@ -76,14 +76,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const images = [
-        'images/0f6f979c-a5dd-4bb4-9565-7e93e7cb06dc.jpg',
-        'images/4cabec6d-8f53-4918-ba55-92dd15882619.jpg',
-        'images/Gemini_Generated_Image_uafu05uafu05uafu.png',
-        'images/animal1.svg',
-        'images/architecture1.svg',
-        'images/cat.svg',
-        'images/city1.svg',
-        'images/geometric1.svg'
+        'coloring/images/0f6f979c-a5dd-4bb4-9565-7e93e7cb06dc.jpg',
+        'coloring/images/4cabec6d-8f53-4918-ba55-92dd15882619.jpg',
+        'coloring/images/Gemini_Generated_Image_uafu05uafu05uafu.png',
+        'coloring/images/animal1.svg',
+        'coloring/images/architecture1.svg',
+        'coloring/images/cat.svg',
+        'coloring/images/city1.svg',
+        'coloring/images/geometric1.svg'
     ];
 
     // Helper: Check if image is SVG format
