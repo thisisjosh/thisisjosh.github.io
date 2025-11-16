@@ -127,6 +127,27 @@ body {
     border: 1px solid #ccc;
 }
 
+#deleteModal .modal-content {
+    text-align: center;
+}
+
+#deleteModal button {
+    padding: 10px 20px;
+    margin: 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#confirmDeleteBtn {
+    background-color: #dc3545;
+    color: white;
+}
+
+#cancelDeleteBtn {
+    background-color: #ccc;
+}
+
 .tutorial-overlay {
     display: flex;
     position: fixed;

@@ -1,6 +1,6 @@
 Coloring App
 
-A simple, dependency-free browser coloring book with SVG support and bucket fill tool.
+A simple, dependency-free mobile friendly browser coloring book with bucket fill.
 
 Quick Start
 
@@ -23,9 +23,8 @@ How to Use
 Features
 
 - Flood-fill bucket tool with anti-aliased edge handling.
-- Auto-save to browser localStorage.
+- Auto-save to browser IndexDB.
 - No external dependencies—pure HTML, CSS, and JavaScript.
-- SVG rendering via canvas fallback.
 
 Adding Images
 

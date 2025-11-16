@@ -1,7 +1,0 @@
-<svg viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg">
-    <path fill="white" stroke="black" stroke-width="2" d="M250 100 C 200 100, 150 150, 150 200 C 150 250, 200 300, 250 300 C 300 300, 350 250, 350 200 C 350 150, 300 100, 250 100 Z M 200 150 A 10 10 0 1 1 180 150 A 10 10 0 1 1 200 150 Z M 300 150 A 10 10 0 1 1 280 150 A 10 10 0 1 1 300 150 Z"></path>
-    <path fill="white" stroke="black" stroke-width="2" d="M250 250 Q 225 275 200 250"></path>
-    <path fill="white" stroke="black" stroke-width="2" d="M250 250 Q 275 275 300 250"></path>
-    <path fill="white" stroke="black" stroke-width="2" d="M150 200 L 100 150"></path>
-    <path fill="white" stroke="black" stroke-width="2" d="M350 200 L 400 150"></path>
-</svg>

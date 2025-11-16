@@ -5,7 +5,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const undoBtn = document.getElementById('undoBtn');
     const clearBtn = document.getElementById('clearBtn');
     const libraryBtn = document.getElementById('libraryBtn');
+    const deleteAllBtn = document.getElementById('deleteAllBtn');
     const modal = document.getElementById('libraryModal');
+    const deleteModal = document.getElementById('deleteModal');
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
     const closeBtn = document.querySelector('.close');
     const imageLibrary = document.getElementById('imageLibrary');
 
@@ -76,14 +80,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const images = [
-        'coloring/images/0f6f979c-a5dd-4bb4-9565-7e93e7cb06dc.jpg',
-        'coloring/images/4cabec6d-8f53-4918-ba55-92dd15882619.jpg',
-        'coloring/images/Gemini_Generated_Image_uafu05uafu05uafu.png',
-        'coloring/images/animal1.svg',
-        'coloring/images/architecture1.svg',
-        'coloring/images/cat.svg',
-        'coloring/images/city1.svg',
-        'coloring/images/geometric1.svg'
+        'images/aliens.png',
+        'images/animals.png',
+        'images/architecture.png',
+        'images/bigfoot.png',
+        'images/dog.png',
+        'images/geometric-patterns-20251116-122457.png',
+        'images/mandala-20251116-122457.png',
+        'images/mandala.png',
+        'images/nature-20251116-122457.png',
+        'images/nature.png',
+        'images/patterns.png',
+        'images/people-20251116-122457.png',
+        'images/people.png',
+        'images/rain-forest.png',
+        'images/sci-fi.png',
+        'images/underwater.png',
+        'images/women.png'
     ];
 
     // Helper: Check if image is SVG format
@@ -467,6 +480,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function logDbContents() {
+        if (!db) {
+            console.log("DB not initialized");
+            return;
+        }
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.getAll();
+
+        request.onerror = () => {
+            console.error('Failed to retrieve from IndexedDB:', request.error);
+        };
+
+        request.onsuccess = () => {
+            console.log("coloringBookDB contents:", request.result);
+        };
+    }
+
     clearBtn.addEventListener('click', () => {
         if (currentImage) {
             // Remove saved progress for this image from IndexedDB and reload it fresh
@@ -510,6 +541,36 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.style.display = 'block';
     });
 
+    deleteAllBtn.addEventListener('click', () => {
+        deleteModal.style.display = 'block';
+    });
+
+    confirmDeleteBtn.addEventListener('click', () => {
+        deleteAllData();
+    });
+
+    cancelDeleteBtn.addEventListener('click', () => {
+        deleteModal.style.display = 'none';
+    });
+
+    function deleteAllData() {
+        if (db) {
+            db.close();
+        }
+        const request = indexedDB.deleteDatabase(DB_NAME);
+        request.onsuccess = () => {
+            console.log('Database deleted successfully');
+            location.reload();
+        };
+        request.onerror = (event) => {
+            console.error('Error deleting database:', event.target.error);
+        };
+        request.onblocked = () => {
+            console.warn('Database deletion blocked. Please close other tabs with this app open.');
+            alert('Could not delete the database because it is open elsewhere. Please close all other tabs with this page open and try again.');
+        };
+    }
+
     // Set canvas size
     const canvasContainer = document.getElementById('canvas-container');
     function resizeCanvas() {
@@ -540,6 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 resizeCanvas();
                 // Show tutorial on first load
                 displayTutorial();
+                logDbContents();
             })
             .catch((err) => {
                 console.error('Failed to initialize IndexedDB:', err);

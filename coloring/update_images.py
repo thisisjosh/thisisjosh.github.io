@@ -2,9 +2,9 @@ import os
 import re
 
 # --- Configuration ---
-IMAGES_DIR = 'coloring/images'
-SCRIPT_FILE = 'coloring/app.js'
-HTML_FILE = 'coloring/index.html'
+IMAGES_DIR = 'images'
+SCRIPT_FILE = 'app.js'
+HTML_FILE = 'index.html'
 # -------------------
 
 def get_image_paths(directory):
