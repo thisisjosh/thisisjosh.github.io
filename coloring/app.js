@@ -80,9 +80,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const images = [
+        'images/aliens-20251116-130608.png',
         'images/aliens.png',
         'images/animals.png',
         'images/architecture.png',
+        'images/bigfoot-20251116-130558.png',
         'images/bigfoot.png',
         'images/dog.png',
         'images/geometric-patterns-20251116-122457.png',
@@ -95,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'images/people.png',
         'images/rain-forest.png',
         'images/sci-fi.png',
+        'images/underwater-20251116-130618.png',
         'images/underwater.png',
         'images/women.png'
     ];
