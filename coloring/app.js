@@ -90,7 +90,6 @@ document.addEventListener('DOMContentLoaded', () => {
         'images/geometric-patterns-20251116-122457.png',
         'images/mandala-20251116-122457.png',
         'images/mandala.png',
-        'images/nature-20251116-122457.png',
         'images/nature.png',
         'images/patterns.png',
         'images/people-20251116-122457.png',
