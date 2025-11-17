@@ -385,40 +385,46 @@ document.addEventListener('DOMContentLoaded', () => {
         return [r, g, b, 255];
     }
 
-    canvas.addEventListener('click', (e) => {
-        if (currentTool !== 'fill') return;
+    // Unified event handling for mouse and touch
+    function getEventCoordinates(e) {
         const rect = canvas.getBoundingClientRect();
-        const x = Math.floor((e.clientX - rect.left) * RESOLUTION_MULTIPLIER);
-        const y = Math.floor((e.clientY - rect.top) * RESOLUTION_MULTIPLIER);
-        
-        // Save state before fill for undo
-        pushUndoState();
-        
-        floodFill(x, y, selectedColor);
-        
-        // Auto-save after coloring action
-        if (currentImage) {
-            autoSave();
-        }
-    });
+        let clientX, clientY;
 
-    // Drawing logic
-    function startDrawing(e) {
-        if (currentTool !== 'draw') return;
-        isDrawing = true;
-        pushUndoState(); // Save state before drawing
-        const rect = canvas.getBoundingClientRect();
-        const x = (e.clientX - rect.left) * RESOLUTION_MULTIPLIER;
-        const y = (e.clientY - rect.top) * RESOLUTION_MULTIPLIER;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
+        if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+
+        const x = Math.floor((clientX - rect.left) * RESOLUTION_MULTIPLIER);
+        const y = Math.floor((clientY - rect.top) * RESOLUTION_MULTIPLIER);
+        return { x, y };
     }
 
-    function draw(e) {
+    function handleStart(e) {
+        e.preventDefault();
+        const { x, y } = getEventCoordinates(e);
+
+        if (currentTool === 'fill') {
+            pushUndoState();
+            floodFill(x, y, selectedColor);
+            if (currentImage) {
+                autoSave();
+            }
+        } else if (currentTool === 'draw') {
+            isDrawing = true;
+            pushUndoState();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+    }
+
+    function handleMove(e) {
         if (!isDrawing || currentTool !== 'draw') return;
-        const rect = canvas.getBoundingClientRect();
-        const x = (e.clientX - rect.left) * RESOLUTION_MULTIPLIER;
-        const y = (e.clientY - rect.top) * RESOLUTION_MULTIPLIER;
+        e.preventDefault();
+        const { x, y } = getEventCoordinates(e);
         ctx.lineTo(x, y);
         ctx.strokeStyle = selectedColor;
         ctx.lineWidth = 2 * RESOLUTION_MULTIPLIER;
@@ -427,19 +433,27 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.stroke();
     }
 
-    function stopDrawing() {
+    function handleEnd(e) {
         if (!isDrawing) return;
+        e.preventDefault();
         isDrawing = false;
         ctx.closePath();
         if (currentImage) {
-            autoSave(); // Auto-save after drawing
+            autoSave();
         }
     }
 
-    canvas.addEventListener('mousedown', startDrawing);
-    canvas.addEventListener('mousemove', draw);
-    canvas.addEventListener('mouseup', stopDrawing);
-    canvas.addEventListener('mouseout', stopDrawing);
+    // Mouse events
+    canvas.addEventListener('mousedown', handleStart);
+    canvas.addEventListener('mousemove', handleMove);
+    canvas.addEventListener('mouseup', handleEnd);
+    canvas.addEventListener('mouseout', handleEnd);
+
+    // Touch events
+    canvas.addEventListener('touchstart', handleStart);
+    canvas.addEventListener('touchmove', handleMove);
+    canvas.addEventListener('touchend', handleEnd);
+    canvas.addEventListener('touchcancel', handleEnd);
 
 
     colorPicker.addEventListener('input', (e) => {
