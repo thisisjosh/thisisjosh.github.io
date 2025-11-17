@@ -168,7 +168,7 @@ body {
 
 .tutorial-content {
     background-color: white;
-    padding: 40px;
+    padding: 20px;
     border-radius: 12px;
     max-width: 500px;
     text-align: center;
@@ -177,7 +177,7 @@ body {
 }
 
 .tutorial-content h1 {
-    margin: 0 0 30px 0;
+    margin: 0 0 15px 0;
     color: #333;
     font-size: 20px;
 }
@@ -185,13 +185,13 @@ body {
 .tutorial-section {
     display: flex;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 15px;
     text-align: left;
 }
 
 .tutorial-icon {
     font-size: 32px;
-    margin-right: 20px;
+    margin-right: 5px;
     min-width: 40px;
 }
 
@@ -202,7 +202,7 @@ body {
 .tutorial-section strong {
     display: block;
     color: #333;
-    margin-bottom: 4px;
+    margin-bottom: 0px;
 }
 
 .tutorial-section div {
@@ -211,13 +211,13 @@ body {
 }
 
 .tutorial-instruction {
-    margin: 30px 0 15px 0;
+    margin: 15px 0 10px 0;
     font-weight: bold;
     color: #333;
 }
 
 .tutorial-ok-btn {
-    margin-top: 25px;
+    margin-top: 20px;
     padding: 10px 30px;
     background-color: #333;
     color: white;

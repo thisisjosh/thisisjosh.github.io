@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearBtn = document.getElementById('clearBtn');
     const libraryBtn = document.getElementById('libraryBtn');
     const deleteAllBtn = document.getElementById('deleteAllBtn');
+    const toolToggleBtn = document.getElementById('toolToggleBtn');
     const modal = document.getElementById('libraryModal');
     const deleteModal = document.getElementById('deleteModal');
     const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
@@ -16,6 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedColor = colorPicker.value;
     let currentImage = '';
     let undoStack = []; // Stack of canvas states for undo
+    let currentTool = 'fill'; // 'fill' or 'draw'
+    let isDrawing = false;
     // Tolerance for flood-fill color matching (higher -> include more anti-aliased pixels)
     const FILL_TOLERANCE = 60;
     const FILL_TOLERANCE_SQ = FILL_TOLERANCE * FILL_TOLERANCE;
@@ -80,13 +83,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const images = [
+        'images/aliens-2025-11-17T17-43-11-221Z.png',
         'images/aliens-20251116-130608.png',
         'images/aliens.png',
         'images/animals.png',
         'images/architecture.png',
+        'images/bigfoot-2025-11-17T17-43-11-221Z.png',
         'images/bigfoot-20251116-130558.png',
         'images/bigfoot.png',
+        'images/bird-2025-11-17T17-43-11-221Z.png',
+        'images/candy-2025-11-17T17-24-05-588Z.png',
+        'images/candy-2025-11-17T17-43-11-221Z.png',
+        'images/cat-2025-11-17T17-43-11-221Z.png',
+        'images/desert-2025-11-17T17-43-11-221Z.png',
+        'images/dog-2025-11-17T17-43-11-221Z.png',
         'images/dog.png',
+        'images/fantasy-2025-11-17T17-43-11-221Z.png',
+        'images/fashion-2025-11-17T17-43-11-221Z.png',
+        'images/food-2025-11-17T17-43-11-221Z.png',
+        'images/fruit-2025-11-17T17-24-05-588Z.png',
+        'images/fruit-2025-11-17T17-43-11-221Z.png',
+        'images/future-city-2025-11-17T17-43-11-221Z.png',
         'images/geometric-patterns-20251116-122457.png',
         'images/mandala-20251116-122457.png',
         'images/mandala.png',
@@ -94,10 +111,16 @@ document.addEventListener('DOMContentLoaded', () => {
         'images/patterns.png',
         'images/people-20251116-122457.png',
         'images/people.png',
+        'images/rain-forest-2025-11-17T17-43-11-221Z.png',
         'images/rain-forest.png',
+        'images/sci-fi-2025-11-17T17-43-11-221Z.png',
         'images/sci-fi.png',
+        'images/steam-punk-2025-11-17T17-24-05-588Z.png',
+        'images/steam-punk-2025-11-17T17-43-11-221Z.png',
+        'images/underwater-2025-11-17T17-43-11-221Z.png',
         'images/underwater-20251116-130618.png',
         'images/underwater.png',
+        'images/women-2025-11-17T17-43-11-221Z.png',
         'images/women.png'
     ];
 
@@ -363,6 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     canvas.addEventListener('click', (e) => {
+        if (currentTool !== 'fill') return;
         const rect = canvas.getBoundingClientRect();
         const x = Math.floor((e.clientX - rect.left) * RESOLUTION_MULTIPLIER);
         const y = Math.floor((e.clientY - rect.top) * RESOLUTION_MULTIPLIER);
@@ -378,8 +402,60 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Drawing logic
+    function startDrawing(e) {
+        if (currentTool !== 'draw') return;
+        isDrawing = true;
+        pushUndoState(); // Save state before drawing
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * RESOLUTION_MULTIPLIER;
+        const y = (e.clientY - rect.top) * RESOLUTION_MULTIPLIER;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+    }
+
+    function draw(e) {
+        if (!isDrawing || currentTool !== 'draw') return;
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * RESOLUTION_MULTIPLIER;
+        const y = (e.clientY - rect.top) * RESOLUTION_MULTIPLIER;
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = selectedColor;
+        ctx.lineWidth = 2 * RESOLUTION_MULTIPLIER;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+    }
+
+    function stopDrawing() {
+        if (!isDrawing) return;
+        isDrawing = false;
+        ctx.closePath();
+        if (currentImage) {
+            autoSave(); // Auto-save after drawing
+        }
+    }
+
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+
+
     colorPicker.addEventListener('input', (e) => {
         selectedColor = e.target.value;
+    });
+
+    toolToggleBtn.addEventListener('click', () => {
+        if (currentTool === 'fill') {
+            currentTool = 'draw';
+            toolToggleBtn.textContent = '✏️';
+            toolToggleBtn.title = 'Switch to Fill';
+        } else {
+            currentTool = 'fill';
+            toolToggleBtn.textContent = '🎨';
+            toolToggleBtn.title = 'Switch to Draw';
+        }
     });
 
     // Undo stack management

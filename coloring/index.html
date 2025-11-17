@@ -5,13 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <title>Coloring Book</title>
-    <link rel="stylesheet" href="style.css?v=9">
+    <link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
     <div class="container">
         <div id="toolbar">
             <button id="libraryBtn" title="Library">📚</button>
             <input type="color" id="colorPicker" value="#ff0000" title="Select Color">
+            <button id="toolToggleBtn" title="Switch Tool">🎨</button>
             <button id="undoBtn" title="Undo">↶</button>
             <button id="clearBtn" title="Clear">🗑️</button>
             <button id="deleteAllBtn" title="Delete All Data">⚠️</button>
@@ -44,36 +45,37 @@
             <div class="tutorial-section">
                 <span class="tutorial-icon">📚</span>
                 <div>
-                    <strong>Library</strong><br>
-                    Choose a new image to color
+                    <strong>Library</strong> Choose a new image to color
                 </div>
             </div>
             <div class="tutorial-section">
                 <span class="tutorial-icon">🎨</span>
                 <div>
-                    <strong>Color Picker</strong><br>
-                    Click to choose your color
+                    <strong>Fill/Draw</strong> Click to toggle to a pen tool
+                </div>
+            </div>
+            <div class="tutorial-section">
+                <span class="tutorial-icon">✏️</span>
+                <div>
+                    <strong>Fill/Draw</strong> Click to toggle to a fill tool
                 </div>
             </div>
             <div class="tutorial-section">
                 <span class="tutorial-icon">↶</span>
                 <div>
-                    <strong>Undo</strong><br>
-                    Undo your last fill
+                    <strong>Undo</strong> Undo your last fill
                 </div>
             </div>
             <div class="tutorial-section">
                 <span class="tutorial-icon">🗑️</span>
                 <div>
-                    <strong>Clear</strong><br>
-                    Clear all colors and start over
+                    <strong>Clear</strong> Clear all colors and start over
                 </div>
             </div>
             <div class="tutorial-section">
                 <span class="tutorial-icon">⚠️</span>
                 <div>
-                    <strong>Delete All Data</strong><br>
-                    Permanently delete all saved progress
+                    <strong>Delete All Data</strong> Permanently delete all saved progress
                 </div>
             </div>
             <p class="tutorial-instruction">Click the 📚 Library button to start coloring!</p>
@@ -81,6 +83,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=9"></script>
+    <script src="app.js?v=10"></script>
 </body>
 </html>
