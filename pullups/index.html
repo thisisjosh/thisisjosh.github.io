@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Pull-up Counter</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevent scrolling */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #000;
+            color: #fff;
+            touch-action: manipulation; /* Disable double-tap zoom etc. */
+            -webkit-tap-highlight-color: rgba(0,0,0,0); /* Remove tap highlight */
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            height: 100%;
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+            box-sizing: border-box;
+        }
+
+        #countDisplay {
+            font-size: 12em; /* Very large font for count */
+            font-weight: bold;
+            line-height: 1;
+            margin-bottom: 20px; /* Space below count */
+            flex-grow: 1; /* Take up available space */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .controls {
+             /* Fixed height for controls area */
+            display: flex;
+            justify-content: space-around; /* Space out buttons */
+            width: 100%;
+            padding-bottom: 20px; /* Space from bottom edge */
+
+        }
+
+        button {
+            font-size: 1.2em;
+            padding: 15px 10px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            background-color: #333;
+            color: #fff;
+            min-width: 80px;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+         button:active {
+             background-color: #555;
+         }
+
+
+        #status {
+            font-size: 1em;
+            color: #aaa;
+            height: 2em; /* Reserve space for status messages */
+            margin-top: 10px;
+        }
+
+    #history {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            color: #fff;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            display: none;
+        }
+
+        #history h2 {
+            text-align: center;
+        }
+
+        .history-entry {
+            position: relative;
+            padding: 10px 0;
+            border-bottom: 1px solid #555;
+            font-size: 1.2em;
+        }
+
+        .history-entry .bar {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            border-radius: 0 2px 2px 0;
+        }
+
+        .bar-green {
+            background-color: #27ae60;
+        }
+
+        .bar-orange {
+            background-color: #f39c12;
+        }
+
+        .history-entry .text {
+            position: relative;
+            padding: 0 10px; /* Padding for the text */
+        }
+
+        #closeHistory {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 1.5em;
+            cursor: pointer;
+        }
+
+        #deleteAllButton {
+            background-color: #c0392b; /* Red for delete */
+            width: 100%;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+        }
+
+        #deleteAllButton:active {
+            background-color: #e74c3c;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 100; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.8); /* Black w/ opacity */
+            -webkit-backdrop-filter: blur(5px);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background-color: #222;
+            margin: 25% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 85%;
+            max-width: 500px;
+            border-radius: 10px;
+            position: relative;
+        }
+
+        .modal-close {
+            color: #aaa;
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .modal-content h2 {
+            margin-top: 0;
+            color: #fff;
+        }
+
+        .modal-content p {
+            color: #ddd;
+        }
+
+        .modal-content ol {
+            padding-left: 20px;
+            color: #ddd;
+        }
+
+        .modal-content li {
+            margin-bottom: 10px;
+        }
+    </style>
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="status">Tap Start to begin</div>
+        <div id="countDisplay">0</div>
+         <div class="controls">
+            <button id="startButton">Start</button>
+            <button id="resetButton">Reset</button>
+            <button id="historyButton">History</button>
+            <button id="helpButton">Help</button>
+         </div>
+    </div>
+    <div id="history">
+        <span id="closeHistory">&times;</span>
+        <h2>History</h2>
+        <button id="deleteAllButton">Delete All</button>
+        <div id="historyContent"></div>
+    </div>
+
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <span id="closeHelpModal" class="modal-close">&times;</span>
+            <h2>Pull-up Counter</h2>
+            <p>This app uses your phone's accelerometer to automatically count pull-ups.</p>
+            <ol>
+                <li><strong>Start:</strong> Tap the "Start" button. You may need to grant sensor permissions.</li>
+                <li><strong>Placement:</strong> Place the phone securely in your pants pocket, oriented vertically.</li>
+                <li><strong>Exercise:</strong> Perform your pull-ups. The app detects the vertical motion. A vibration indicates a successful count.</li>
+                <li><strong>Stop:</strong> When finished, tap "Stop". Your session's count will be saved.</li>
+                <li><strong>History:</strong> Tap "History" to see your past workouts, complete with a visual graph of your progress.</li>
+                <li><strong>Reset:</strong> Tap "Reset" to clear the current count if you want to start counting back from zero.</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let pullUpCount = 0;
+        let accelerometerActive = false;
+        let motionHandler = null; // Store the handler reference
+
+        // --- IndexedDB ---
+        let db;
+        const DB_NAME = 'PullupsDB';
+        const STORE_NAME = 'pullups';
+
+        function initDB() {
+            const request = indexedDB.open(DB_NAME, 1);
+
+            request.onupgradeneeded = event => {
+                db = event.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME, { keyPath: 'date' });
+                }
+            };
+
+            request.onsuccess = event => {
+                db = event.target.result;
+                loadTodaysCount();
+            };
+
+            request.onerror = event => {
+                console.error('Database error:', event.target.errorCode);
+            };
+        }
+
+        function updateDB(count) {
+            if (!db) return;
+            const transaction = db.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const today = new Date().toISOString().slice(0, 10);
+            const request = store.get(today);
+
+            request.onsuccess = () => {
+                const data = request.result;
+                if (data) {
+                    data.count = count;
+                    store.put(data);
+                } else {
+                    store.put({ date: today, count: count });
+                }
+            };
+        }
+
+        function loadTodaysCount() {
+            if (!db) return;
+            const transaction = db.transaction([STORE_NAME], 'readonly');
+            const store = transaction.objectStore(STORE_NAME);
+            const today = new Date().toISOString().slice(0, 10);
+            const request = store.get(today);
+
+            request.onsuccess = () => {
+                if (request.result) {
+                    pullUpCount = request.result.count;
+                    updateDisplay();
+                }
+            };
+        }
+
+        function showHistory() {
+            if (!db) return;
+            const transaction = db.transaction([STORE_NAME], 'readonly');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.getAll();
+
+            request.onsuccess = () => {
+                const historyRecords = request.result;
+                let contentHtml = '';
+
+                if (historyRecords && historyRecords.length > 0) {
+                    // Sort by date descending to show the latest first
+                    historyRecords.sort((a, b) => b.date.localeCompare(a.date));
+
+                    // Find the maximum count to scale the bars
+                    const maxCount = historyRecords.reduce((max, record) => record.count > max ? record.count : max, 0);
+
+                    historyRecords.forEach(item => {
+                        const barWidth = maxCount > 0 ? (item.count / maxCount) * 100 : 0;
+                        const barClass = item.count >= 10 ? 'bar-green' : 'bar-orange';
+                        contentHtml += `<div class="history-entry"><span class="bar ${barClass}" style="width: ${barWidth}%;"></span><span class="text">${item.date}: ${item.count}</span></div>`;
+                    });
+                } else {
+                    contentHtml = '<p>No history yet.</p>';
+                }
+                historyContent.innerHTML = contentHtml;
+                historyView.style.display = 'block';
+            };
+
+            request.onerror = (event) => {
+                console.error('Error fetching history:', event.target.errorCode);
+                historyContent.innerHTML = '<p>Could not load history.</p>';
+                historyView.style.display = 'block';
+            };
+        }
+
+
+        // --- Configuration ---
+        const SMOOTHING_FACTOR = 0.2; // Lower = smoother but more lag (0.0 - 1.0)
+        const GRAVITY = 9.81; // Approximate gravity
+
+        // Thresholds - THESE WILL LIKELY NEED TUNING BASED ON TESTING!
+        // We look for changes in acceleration *relative to gravity*.
+        // Going UP: Strong positive acceleration change (pushing against gravity)
+        // Going DOWN: Strong negative acceleration change (accelerating with gravity or braking less)
+        const UP_THRESHOLD = 2.5;   // m/s^2 change needed to trigger 'going up' state
+        const DOWN_THRESHOLD = -2.0; // m/s^2 change needed to trigger 'going down' state
+        const RESET_THRESHOLD = 1.0; // m/s^2 change threshold to return to idle (must be close to 0 change)
+        const MIN_TIME_BETWEEN_COUNTS_MS = 500; // Minimum time between pullups to avoid double counts
+
+        // --- State Machine ---
+        let currentState = 'IDLE'; // Possible states: IDLE, GOING_UP, PEAK_REACHED, GOING_DOWN
+        let lastCountTime = 0;
+        let smoothedY = 0; // Smoothed Y-axis acceleration (including gravity)
+        let referenceY = GRAVITY; // Assume initial state is stationary (gravity on Y)
+        let firstReading = true;
+
+        // --- DOM Elements ---
+        const countDisplay = document.getElementById('countDisplay');
+        const startButton = document.getElementById('startButton');
+        const resetButton = document.getElementById('resetButton');
+        const historyButton = document.getElementById('historyButton');
+        const statusDisplay = document.getElementById('status');
+        const historyView = document.getElementById('history');
+        const historyContent = document.getElementById('historyContent');
+        const closeHistoryButton = document.getElementById('closeHistory');
+        const deleteAllButton = document.getElementById('deleteAllButton');
+        const helpButton = document.getElementById('helpButton');
+        const helpModal = document.getElementById('helpModal');
+        const closeHelpModal = document.getElementById('closeHelpModal');
+
+        // --- Functions ---
+
+        function updateDisplay() {
+            countDisplay.textContent = pullUpCount;
+        }
+
+        function updateStatus(message) {
+            statusDisplay.textContent = message;
+        }
+
+        function resetCounter() {
+            pullUpCount = 0;
+            currentState = 'IDLE';
+            firstReading = true;
+            smoothedY = 0; // Reset smoothed value
+            referenceY = GRAVITY; // Reset reference point
+            updateDisplay();
+            updateDB(pullUpCount); // Update DB on reset
+            updateStatus("Counter reset. Tap Start.");
+            console.log("Counter Reset");
+        }
+
+        function deleteAllHistory() {
+            if (!db) {
+                console.error("DB not initialized.");
+                return;
+            }
+
+            if (!confirm("Are you sure you want to delete all history? This cannot be undone.")) {
+                return;
+            }
+
+            const transaction = db.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.clear();
+
+            request.onsuccess = () => {
+                console.log("All history deleted.");
+                pullUpCount = 0;
+                updateDisplay();
+                // Refresh the history view to show it's empty
+                showHistory();
+                updateStatus("All history has been deleted.");
+            };
+
+            request.onerror = (event) => {
+                console.error("Error deleting history:", event.target.errorCode);
+                alert("Error deleting history. Please check the console.");
+            };
+        }
+
+        function handleMotionEvent(event) {
+            if (!event.accelerationIncludingGravity || event.accelerationIncludingGravity.y === null) {
+                updateStatus("Error: No acceleration data.");
+                stopAccelerometer();
+                return;
+            }
+
+            // Assuming phone in pocket, top up: Y-axis should capture vertical motion.
+            // Note: Depending on exact phone orientation, Z might be involved too. Y is the most common.
+            const rawY = event.accelerationIncludingGravity.y;
+
+            // Initialize smoothedY and referenceY on first reading after start/reset
+            if (firstReading) {
+                smoothedY = rawY;
+                referenceY = rawY; // Set initial gravity reference
+                firstReading = false;
+                console.log(`Initial Reference Y (Gravity): ${referenceY.toFixed(2)}`);
+                 updateStatus("Detecting motion...");
+                return; // Don't process the very first reading
+            }
+
+            // Apply Exponential Moving Average (EMA) filter for smoothing
+            smoothedY = SMOOTHING_FACTOR * rawY + (1 - SMOOTHING_FACTOR) * smoothedY;
+
+            // Calculate acceleration change relative to the reference (gravity)
+            const deltaY = smoothedY - referenceY;
+
+            // --- Pull-up Detection Logic (State Machine) ---
+            const now = Date.now();
+
+            // console.log(`RawY: ${rawY.toFixed(2)}, SmoothedY: ${smoothedY.toFixed(2)}, DeltaY: ${deltaY.toFixed(2)}, State: ${currentState}`); // DEBUG
+
+            switch (currentState) {
+                case 'IDLE':
+                    // Look for a significant upward acceleration
+                    if (deltaY > UP_THRESHOLD) {
+                        currentState = 'GOING_UP';
+                        console.log(`State Change: IDLE -> GOING_UP (DeltaY: ${deltaY.toFixed(2)})`);
+                    }
+                    break;
+
+                case 'GOING_UP':
+                    // Look for the acceleration to decrease, indicating the peak or start of descent
+                    // We require it to drop below a certain point relative to the peak or just start going negative strongly
+                     if (deltaY < 0) { // Started accelerating downwards relative to reference
+                        currentState = 'PEAK_REACHED';
+                        console.log(`State Change: GOING_UP -> PEAK_REACHED (DeltaY: ${deltaY.toFixed(2)})`);
+                    }
+                    break;
+
+                case 'PEAK_REACHED':
+                     // Look for significant downward acceleration (or less upward)
+                    if (deltaY < DOWN_THRESHOLD) {
+                        currentState = 'GOING_DOWN';
+                        console.log(`State Change: PEAK_REACHED -> GOING_DOWN (DeltaY: ${deltaY.toFixed(2)})`);
+                     } else if (deltaY > RESET_THRESHOLD) {
+                         // If we go back up slightly without a clear down, reset to IDLE (false positive start)
+                         currentState = 'IDLE';
+                         console.log(`State Change: PEAK_REACHED -> IDLE (False start?) (DeltaY: ${deltaY.toFixed(2)})`);
+                     }
+                    break;
+
+                case 'GOING_DOWN':
+                    // Look for acceleration to return close to the resting state (small delta)
+                    // And ensure enough time has passed since the last count
+                    if (Math.abs(deltaY) < RESET_THRESHOLD) {
+                        if (now - lastCountTime > MIN_TIME_BETWEEN_COUNTS_MS) {
+                            pullUpCount++;
+                            lastCountTime = now;
+                            updateDisplay();
+                            console.log(`PULL-UP COUNTED: ${pullUpCount} (DeltaY: ${deltaY.toFixed(2)})`);
+                             updateStatus(`Count: ${pullUpCount}`); // Provide feedback
+                             // Vibrate slightly on count (optional, requires user interaction context)
+                             if (navigator.vibrate) {
+                                 navigator.vibrate(100); // Vibrate for 100ms
+                             }
+                        } else {
+                            console.log("State Change: GOING_DOWN -> IDLE (Debounced)");
+                        }
+                        currentState = 'IDLE'; // Reset state for next pull-up
+                    }
+                    break;
+            }
+        }
+
+        function requestPermissionAndStart() {
+            // --- iOS Specific Permission Request ---
+            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                updateStatus("Requesting sensor permission...");
+                DeviceMotionEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            startAccelerometer();
+                        } else {
+                            updateStatus("Permission denied. Enable in Settings > Safari > Motion & Orientation.");
+                            startButton.disabled = false;
+                            startButton.textContent = "Start";
+                        }
+                    })
+                    .catch(error => {
+                         console.error("Permission request error:", error);
+                         updateStatus("Permission error. Try reloading.");
+                         startButton.disabled = false;
+                         startButton.textContent = "Start";
+                    });
+            } else {
+                // --- Non-iOS or older browsers ---
+                 if ('DeviceMotionEvent' in window) {
+                    console.log("Attempting to start accelerometer (non-iOS method)...");
+                    startAccelerometer();
+                 } else {
+                    updateStatus("Error: Device Motion not supported.");
+                    startButton.disabled = false;
+                    startButton.textContent = "Start";
+                 }
+            }
+        }
+
+        function startAccelerometer() {
+            if (accelerometerActive) return; // Already running
+
+            console.log("Starting accelerometer...");
+            motionHandler = handleMotionEvent; // Assign handler
+            // Use a relatively high frequency if possible, but browser may throttle
+            window.addEventListener('devicemotion', motionHandler, true);
+            accelerometerActive = true;
+            firstReading = true; // Reset first reading flag
+            currentState = 'IDLE'; // Ensure starting state
+            startButton.textContent = "Stop";
+            startButton.disabled = false; // Re-enable button to allow stopping
+            updateStatus("Place phone in pocket & start...");
+        }
+
+        function stopAccelerometer() {
+            if (!accelerometerActive) return; // Already stopped
+
+            console.log("Stopping accelerometer...");
+            if (motionHandler) {
+                window.removeEventListener('devicemotion', motionHandler, true);
+                motionHandler = null; // Clear reference
+            }
+            accelerometerActive = false;
+            currentState = 'IDLE'; // Reset state
+            startButton.textContent = "Start";
+            startButton.disabled = false; // Re-enable button
+            if (pullUpCount > 0) {
+                 updateStatus(`Stopped. Final Count: ${pullUpCount}`);
+                 updateDB(pullUpCount); // Update DB on stop
+            } else {
+                 updateStatus("Stopped. Tap Start to begin.");
+            }
+        }
+
+        // --- Event Listeners ---
+        startButton.addEventListener('click', () => {
+             startButton.disabled = true; // Prevent double clicks
+             if (!accelerometerActive) {
+                 requestPermissionAndStart(); // This handles both permission and starting
+             } else {
+                 stopAccelerometer();
+             }
+        });
+
+        resetButton.addEventListener('click', () => {
+            if (accelerometerActive) {
+                stopAccelerometer(); // Stop first if running
+            }
+            resetCounter(); // Then reset
+        });
+
+        historyButton.addEventListener('click', showHistory);
+
+        closeHistoryButton.addEventListener('click', () => {
+            historyView.style.display = 'none';
+        });
+
+        deleteAllButton.addEventListener('click', deleteAllHistory);
+
+        helpButton.addEventListener('click', () => {
+            helpModal.style.display = 'block';
+        });
+
+        closeHelpModal.addEventListener('click', () => {
+            helpModal.style.display = 'none';
+        });
+
+        // Close modal if user clicks outside of the content
+        window.addEventListener('click', (event) => {
+            if (event.target == helpModal) {
+                helpModal.style.display = 'none';
+            }
+        });
+
+        // --- Initial Setup ---
+        initDB();
+        updateDisplay(); // Show initial count '0'
+
+        // Inform user about potential permission requirement on load
+        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+             updateStatus("Tap Start to request sensor permission.");
+        }
+
+    </script>
+</body>
+</html>

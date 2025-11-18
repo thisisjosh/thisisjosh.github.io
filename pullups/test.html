@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Data Generator</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            padding: 20px;
+            background-color: #111;
+            color: #fff;
+        }
+        button {
+            font-size: 1.2em;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            background-color: #333;
+            color: #fff;
+        }
+        button:disabled {
+            background-color: #222;
+            color: #777;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 20px;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+    </style>
+</head>
+<body>
+    <h1>Pull-up History Test Data Generator</h1>
+    <p>Click the button to clear existing data and add 30 days of fake historical pull-up counts to the database.</p>
+    <p>After generating, open <code>pullups.html</code> and check the "History" section.</p>
+    <button id="generateButton">Generate Data</button>
+    <div id="status"></div>
+
+    <script>
+        const generateButton = document.getElementById('generateButton');
+        const statusDiv = document.getElementById('status');
+
+        const DB_NAME = 'PullupsDB';
+        const STORE_NAME = 'pullups';
+        let db;
+
+        function updateStatus(message, isError = false) {
+            statusDiv.textContent = message;
+            statusDiv.style.color = isError ? '#ff4545' : '#45ff75';
+            console.log(message);
+        }
+
+        function generateData() {
+            if (!db) {
+                updateStatus('Database is not open.', true);
+                return;
+            }
+
+            generateButton.disabled = true;
+            const transaction = db.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+
+            // Clear existing data first
+            const clearRequest = store.clear();
+
+            clearRequest.onsuccess = () => {
+                console.log('Object store cleared.');
+                updateStatus('Cleared old data. Generating new data...');
+
+                const today = new Date();
+                let recordsAdded = 0;
+                const totalRecords = 30;
+
+                for (let i = 0; i < totalRecords; i++) {
+                    const date = new Date();
+                    date.setDate(today.getDate() - i);
+                    const dateString = date.toISOString().slice(0, 10);
+
+                    // Generate a random number of pull-ups (e.g., between 5 and 50)
+                    const pullUpCount = Math.floor(Math.random() * 46) + 5;
+
+                    const record = { date: dateString, count: pullUpCount };
+
+                    const addRequest = store.put(record);
+
+                    addRequest.onsuccess = () => {
+                        recordsAdded++;
+                    };
+                    addRequest.onerror = (event) => {
+                        console.error(`Error adding record for ${dateString}:`, event.target.error);
+                    };
+                }
+
+                transaction.oncomplete = () => {
+                    if (recordsAdded === totalRecords) {
+                        updateStatus(`Successfully added ${recordsAdded} records for the last 30 days.`);
+                    } else {
+                        updateStatus(`Partially added data. ${recordsAdded}/${totalRecords} records stored.`, true);
+                    }
+                    generateButton.disabled = false;
+                };
+
+                transaction.onerror = (event) => {
+                    updateStatus('Transaction error while adding data.', true);
+                    console.error('Transaction error:', event.target.error);
+                    generateButton.disabled = false;
+                };
+            };
+
+            clearRequest.onerror = (event) => {
+                updateStatus('Error clearing the store.', true);
+                console.error('Clear request error:', event.target.error);
+                generateButton.disabled = false;
+            };
+        }
+
+        function initDB() {
+            updateStatus('Opening database...');
+            const request = indexedDB.open(DB_NAME, 1);
+
+            request.onupgradeneeded = event => {
+                db = event.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME, { keyPath: 'date' });
+                    console.log('Created object store.');
+                }
+            };
+
+            request.onsuccess = event => {
+                db = event.target.result;
+                updateStatus('Database opened successfully. Ready to generate data.');
+                generateButton.disabled = false;
+            };
+
+            request.onerror = event => {
+                updateStatus('Database error: ' + event.target.errorCode, true);
+                console.error('Database error:', event.target.errorCode);
+            };
+        }
+
+        generateButton.addEventListener('click', generateData);
+
+        // --- Initial Setup ---
+        generateButton.disabled = true;
+        initDB();
+
+    </script>
+</body>
+</html>
