@@ -14,6 +14,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeBtn = document.querySelector('.close');
     const imageLibrary = document.getElementById('imageLibrary');
 
+    // Offscreen canvas for drawing, unaffected by display transformations
+    const offscreenCanvas = document.createElement('canvas');
+    const offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+
+    // Zoom and pan state
+    let scale = 1.0;
+    let offsetX = 0;
+    let offsetY = 0;
+    
+    // Gesture state
+    let isPanning = false; // For mouse drag-to-pan
+    let lastPan = { x: 0, y: 0 };
+    let initialPinchDistance = null;
+    let lastTouches = [];
+
     let selectedColor = colorPicker.value;
     let currentImage = '';
     let undoStack = []; // Stack of canvas states for undo
@@ -30,6 +45,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const DB_VERSION = 1;
     const STORE_NAME = 'savedProgress';
     let db = null;
+
+    // Redraw the visible canvas with the current transform
+    function redraw() {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+
+        ctx.save();
+        ctx.translate(offsetX, offsetY);
+        ctx.scale(scale, scale);
+        ctx.drawImage(offscreenCanvas, 0, 0);
+        ctx.restore();
+    }
+
+    // Reset zoom and pan to default
+    function resetTransform() {
+        scale = 1.0;
+        offsetX = 0;
+        offsetY = 0;
+    }
 
     // Initialize IndexedDB
     function initIndexedDB() {
@@ -157,6 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadImage(src, skipSavedProgress = false) {
         currentImage = src;
         undoStack = []; // Clear undo stack when loading a new image
+        resetTransform();
         
         // Check if there's saved progress for this image (unless we're explicitly skipping it)
         if (!skipSavedProgress) {
@@ -164,12 +201,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // If we have saved progress, just display it directly
             if (saveData && saveData.data) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
                 const img = new Image();
                 img.onload = () => {
                     try {
                         // Draw the saved image at full canvas size
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        offscreenCtx.drawImage(img, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+                        redraw();
                     } catch (err) {
                         console.error('Error loading saved progress:', err);
                         // Fallback: reload fresh image
@@ -199,17 +237,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const svgText = await response.text();
                 
                 // Clear canvas
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
 
                 // Draw SVG via an <img> using a data URL
                 await new Promise((resolve, reject) => {
                     const img = new Image();
                     img.onload = () => {
                         try {
-                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
                             // Preserve aspect ratio and center the image
-                            const dims = fitWithinBounds(img.width, img.height, canvas.width, canvas.height);
-                            ctx.drawImage(img, dims.x, dims.y, dims.w, dims.h);
+                            const dims = fitWithinBounds(img.width, img.height, offscreenCanvas.width, offscreenCanvas.height);
+                            offscreenCtx.drawImage(img, dims.x, dims.y, dims.w, dims.h);
                             resolve();
                         } catch (err) {
                             reject(err);
@@ -220,29 +258,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             } else {
                 // Load raster image (PNG, JPG, GIF, etc.): direct image load
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
                 
                 await new Promise((resolve, reject) => {
                     const img = new Image();
                     img.onload = () => {
                         try {
-                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
                             
                             // Draw with white background to ensure we have opaque pixels for flood fill
-                            ctx.fillStyle = 'white';
-                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            offscreenCtx.fillStyle = 'white';
+                            offscreenCtx.fillRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
                             
                             // For raster images, preserve aspect ratio and center within canvas
-                            const dims = fitWithinBounds(img.width, img.height, canvas.width, canvas.height);
+                            const dims = fitWithinBounds(img.width, img.height, offscreenCanvas.width, offscreenCanvas.height);
                             
                             console.log('Loading raster image:', {
                                 src: src,
                                 imageNaturalSize: { width: img.naturalWidth, height: img.naturalHeight },
-                                canvasSize: { width: canvas.width, height: canvas.height },
+                                canvasSize: { width: offscreenCanvas.width, height: offscreenCanvas.height },
                                 calculatedDims: dims
                             });
                             
-                            ctx.drawImage(img, dims.x, dims.y, dims.w, dims.h);
+                            offscreenCtx.drawImage(img, dims.x, dims.y, dims.w, dims.h);
                             resolve();
                         } catch (err) {
                             console.error('Error drawing image:', err);
@@ -269,21 +307,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Error loading image:', error);
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.font = "16px Arial";
-            ctx.fillStyle = "red";
-            ctx.textAlign = "center";
-            ctx.fillText("Error loading image", canvas.width/2, canvas.height/2);
+            offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+            offscreenCtx.font = "16px Arial";
+            offscreenCtx.fillStyle = "red";
+            offscreenCtx.textAlign = "center";
+            offscreenCtx.fillText("Error loading image", offscreenCanvas.width/2, offscreenCanvas.height/2);
         }
+        redraw();
     }
 
     // Robust scanline flood-fill. Handles RGBA and antialiased edges better.
     function floodFill(startX, startY, fillColor) {
-        const width = canvas.width;
-        const height = canvas.height;
+        const width = offscreenCanvas.width;
+        const height = offscreenCanvas.height;
         if (startX < 0 || startY < 0 || startX >= width || startY >= height) return;
 
-        const imageData = ctx.getImageData(0, 0, width, height);
+        const imageData = offscreenCtx.getImageData(0, 0, width, height);
         const data = imageData.data;
 
         const startPos = (startY * width + startX) * 4;
@@ -351,7 +390,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        ctx.putImageData(imageData, 0, 0);
+        offscreenCtx.putImageData(imageData, 0, 0);
+        redraw();
     }
 
     // Compare RGBA arrays with tolerance for anti-aliased edges
@@ -398,12 +438,32 @@ document.addEventListener('DOMContentLoaded', () => {
             clientY = e.clientY;
         }
 
-        const x = Math.floor((clientX - rect.left) * RESOLUTION_MULTIPLIER);
-        const y = Math.floor((clientY - rect.top) * RESOLUTION_MULTIPLIER);
-        return { x, y };
+        // Coords on the CSS-styled canvas
+        const styleX = clientX - rect.left;
+        const styleY = clientY - rect.top;
+
+        // Coords on the backing canvas (high-res)
+        const backingX = styleX * RESOLUTION_MULTIPLIER;
+        const backingY = styleY * RESOLUTION_MULTIPLIER;
+
+        // Invert the transform to get coords in the image space
+        const imageX = (backingX - offsetX) / scale;
+        const imageY = (backingY - offsetY) / scale;
+
+        return { x: Math.floor(imageX), y: Math.floor(imageY) };
     }
 
     function handleStart(e) {
+        // Mouse panning
+        if (e.type === 'mousedown' && scale > 1.0) {
+            e.preventDefault();
+            isPanning = true;
+            lastPan = { x: e.clientX, y: e.clientY };
+            return;
+        }
+
+        if (e.touches && e.touches.length > 1) return; // Ignore multi-touch for drawing
+
         e.preventDefault();
         const { x, y } = getEventCoordinates(e);
 
@@ -416,31 +476,159 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (currentTool === 'draw') {
             isDrawing = true;
             pushUndoState();
-            ctx.beginPath();
-            ctx.moveTo(x, y);
+            offscreenCtx.beginPath();
+            offscreenCtx.moveTo(x, y);
         }
     }
 
     function handleMove(e) {
+        // Mouse panning
+        if (isPanning && e.type === 'mousemove') {
+            e.preventDefault();
+            const dx = e.clientX - lastPan.x;
+            const dy = e.clientY - lastPan.y;
+            offsetX += dx * RESOLUTION_MULTIPLIER;
+            offsetY += dy * RESOLUTION_MULTIPLIER;
+            // Boundary checks
+            offsetX = Math.max(canvas.width * (1 - scale), Math.min(0, offsetX));
+            offsetY = Math.max(canvas.height * (1 - scale), Math.min(0, offsetY));
+            lastPan = { x: e.clientX, y: e.clientY };
+            redraw();
+            return;
+        }
+
         if (!isDrawing || currentTool !== 'draw') return;
         e.preventDefault();
         const { x, y } = getEventCoordinates(e);
-        ctx.lineTo(x, y);
-        ctx.strokeStyle = selectedColor;
-        ctx.lineWidth = 2 * RESOLUTION_MULTIPLIER;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke();
+        offscreenCtx.lineTo(x, y);
+        offscreenCtx.strokeStyle = selectedColor;
+        offscreenCtx.lineWidth = 2 * RESOLUTION_MULTIPLIER;
+        offscreenCtx.lineCap = 'round';
+        offscreenCtx.lineJoin = 'round';
+        offscreenCtx.stroke();
+        redraw();
     }
 
     function handleEnd(e) {
+        if (isPanning) {
+            isPanning = false;
+            return;
+        }
         if (!isDrawing) return;
         e.preventDefault();
         isDrawing = false;
-        ctx.closePath();
+        offscreenCtx.closePath();
         if (currentImage) {
             autoSave();
         }
+    }
+
+    // --- Touch Gesture Handlers for Zoom/Pan ---
+    function handleGestureStart(e) {
+        if (e.touches.length >= 2) {
+            e.preventDefault();
+            const touch1 = e.touches[0];
+            const touch2 = e.touches[1];
+            initialPinchDistance = Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY);
+            lastTouches = Array.from(e.touches);
+        } else {
+            handleStart(e);
+        }
+    }
+
+    function handleGestureMove(e) {
+        if (e.touches.length >= 2) {
+            e.preventDefault();
+            const touch1 = e.touches[0];
+            const touch2 = e.touches[1];
+            
+            // --- Pinch to Zoom ---
+            const currentPinchDistance = Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY);
+            if (initialPinchDistance) {
+                const scaleFactor = currentPinchDistance / initialPinchDistance;
+                const rect = canvas.getBoundingClientRect();
+                const center = {
+                    x: ((touch1.clientX + touch2.clientX) / 2) - rect.left,
+                    y: ((touch1.clientY + touch2.clientY) / 2) - rect.top
+                };
+                const centerCanvas = {
+                    x: center.x * RESOLUTION_MULTIPLIER,
+                    y: center.y * RESOLUTION_MULTIPLIER
+                };
+                const newScale = scale * scaleFactor;
+                const clampedScale = Math.max(1.0, Math.min(newScale, 10.0));
+                const actualScaleFactor = clampedScale / scale;
+
+                if (actualScaleFactor !== 1) {
+                    scale = clampedScale;
+                    offsetX = centerCanvas.x + (offsetX - centerCanvas.x) * actualScaleFactor;
+                    offsetY = centerCanvas.y + (offsetY - centerCanvas.y) * actualScaleFactor;
+                }
+                initialPinchDistance = currentPinchDistance;
+            }
+
+            // --- Two-finger Pan ---
+            if (lastTouches.length >= 2) {
+                const lastCenter = {
+                    x: (lastTouches[0].clientX + lastTouches[1].clientX) / 2,
+                    y: (lastTouches[0].clientY + lastTouches[1].clientY) / 2
+                };
+                const currentCenter = {
+                    x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+                    y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+                };
+                const dx = currentCenter.x - lastCenter.x;
+                const dy = currentCenter.y - lastCenter.y;
+                offsetX += dx * RESOLUTION_MULTIPLIER;
+                offsetY += dy * RESOLUTION_MULTIPLIER;
+            }
+
+            // Boundary checks
+            offsetX = Math.max(canvas.width * (1 - scale), Math.min(0, offsetX));
+            offsetY = Math.max(canvas.height * (1 - scale), Math.min(0, offsetY));
+
+            redraw();
+            lastTouches = Array.from(e.touches);
+        } else {
+            handleMove(e);
+        }
+    }
+
+    function handleGestureEnd(e) {
+        if (e.touches.length < 2) {
+            initialPinchDistance = null;
+            lastTouches = [];
+        }
+        handleEnd(e);
+    }
+
+    function handleWheel(e) {
+        e.preventDefault();
+        const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
+        const rect = canvas.getBoundingClientRect();
+        const center = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+        const centerCanvas = {
+            x: center.x * RESOLUTION_MULTIPLIER,
+            y: center.y * RESOLUTION_MULTIPLIER
+        };
+        const newScale = scale * scaleFactor;
+        const clampedScale = Math.max(1.0, Math.min(newScale, 10.0));
+        const actualScaleFactor = clampedScale / scale;
+
+        if (actualScaleFactor !== 1) {
+            scale = clampedScale;
+            offsetX = centerCanvas.x + (offsetX - centerCanvas.x) * actualScaleFactor;
+            offsetY = centerCanvas.y + (offsetY - centerCanvas.y) * actualScaleFactor;
+        }
+        
+        // Boundary checks
+        offsetX = Math.max(canvas.width * (1 - scale), Math.min(0, offsetX));
+        offsetY = Math.max(canvas.height * (1 - scale), Math.min(0, offsetY));
+
+        redraw();
     }
 
     // Mouse events
@@ -448,12 +636,13 @@ document.addEventListener('DOMContentLoaded', () => {
     canvas.addEventListener('mousemove', handleMove);
     canvas.addEventListener('mouseup', handleEnd);
     canvas.addEventListener('mouseout', handleEnd);
+    canvas.addEventListener('wheel', handleWheel);
 
     // Touch events
-    canvas.addEventListener('touchstart', handleStart);
-    canvas.addEventListener('touchmove', handleMove);
-    canvas.addEventListener('touchend', handleEnd);
-    canvas.addEventListener('touchcancel', handleEnd);
+    canvas.addEventListener('touchstart', handleGestureStart);
+    canvas.addEventListener('touchmove', handleGestureMove);
+    canvas.addEventListener('touchend', handleGestureEnd);
+    canvas.addEventListener('touchcancel', handleGestureEnd);
 
 
     colorPicker.addEventListener('input', (e) => {
@@ -667,18 +856,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvasContainer = document.getElementById('canvas-container');
     function resizeCanvas() {
         // Save current canvas content before resizing
-        const currentCanvasData = canvas.toDataURL();
+        const currentCanvasDataUrl = offscreenCanvas.toDataURL();
         
         // Use higher resolution internally to reduce aliasing
-        canvas.width = canvasContainer.clientWidth * RESOLUTION_MULTIPLIER;
-        canvas.height = canvasContainer.clientHeight * RESOLUTION_MULTIPLIER;
-        // Scale the canvas display back down to actual window size
+        const newWidth = canvasContainer.clientWidth * RESOLUTION_MULTIPLIER;
+        const newHeight = canvasContainer.clientHeight * RESOLUTION_MULTIPLIER;
+
+        // Resize the visible canvas
+        canvas.width = newWidth;
+        canvas.height = newHeight;
         canvas.style.width = canvasContainer.clientWidth + 'px';
         canvas.style.height = canvasContainer.clientHeight + 'px';
+
+        // Resize the offscreen canvas
+        offscreenCanvas.width = newWidth;
+        offscreenCanvas.height = newHeight;
         
+        // Restore the image, which will also redraw it
         if (currentImage) {
-            // Reload image which will restore saved progress
-            loadImage(currentImage);
+            const img = new Image();
+            img.onload = () => {
+                // When reloading, we need to fit the image to the new canvas size
+                const dims = fitWithinBounds(img.width, img.height, newWidth, newHeight);
+                offscreenCtx.clearRect(0, 0, newWidth, newHeight);
+                offscreenCtx.drawImage(img, dims.x, dims.y, dims.w, dims.h);
+                redraw();
+            };
+            img.onerror = () => {
+                // If the image fails to load, just redraw an empty canvas
+                redraw();
+            };
+            img.src = currentCanvasDataUrl;
+        } else {
+            // If there's no image, just redraw the empty canvas
+            redraw();
         }
     }
     window.addEventListener('resize', resizeCanvas);

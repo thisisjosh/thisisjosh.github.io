@@ -18,6 +18,11 @@ body {
     height: 100%;
     display: flex;
     flex-direction: row;
+    max-width: 1800px; /* Max width for large screens */
+    margin: 0 auto; /* Center the container */
+    box-shadow: 0 0 20px rgba(0,0,0,0.15); /* Add a subtle shadow */
+    border-left: 1px solid #ccc;
+    border-right: 1px solid #ccc;
 }
 
 #toolbar {
@@ -263,6 +268,41 @@ body {
 
     .modal-content {
         margin: 20% auto;
+    }
+}
+
+@media (orientation: portrait) {
+    .container {
+        flex-direction: column; /* Toolbar at the top */
+    }
+
+    #toolbar {
+        flex-direction: row;
+        justify-content: space-around;
+        border-right: none;
+        border-bottom: 1px solid #ccc;
+        width: 100%;
+        height: var(--toolbar-height-portrait);
+        padding: 5px;
+        position: static; /* remove fixed positioning */
+    }
+
+    #toolbar input[type="color"] {
+        margin-bottom: 0;
+        margin-right: 10px;
+        width: 35px;
+        height: 35px;
+    }
+
+    #toolbar button {
+        margin-bottom: 0;
+        margin-right: 5px;
+        font-size: 1.5rem;
+    }
+
+    #canvas-container {
+        height: calc(100% - var(--toolbar-height-portrait));
+        width: 100%;
     }
 }
 
