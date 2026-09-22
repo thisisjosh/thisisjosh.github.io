@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Robot Status Screen</title>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        :root {
+            --neon-green: #39ff14;
+            --dark-green: #0a330a;
+            --bg-color: #020802;
+            --border-style: 2px solid var(--neon-green);
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: var(--neon-green);
+            font-family: 'VT323', monospace;
+            overflow: hidden;
+            text-shadow: 0 0 5px var(--neon-green);
+        }
+
+        /* CRT Scanline Overlay */
+        .scanlines {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.3));
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        /* Screen Flicker Animation */
+        .flicker {
+            animation: crt-flicker 0.15s infinite;
+            pointer-events: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(57, 255, 20, 0.02);
+            z-index: 999;
+        }
+
+        @keyframes crt-flicker {
+            0% { opacity: 0.95; }
+            50% { opacity: 0.85; }
+            100% { opacity: 1; }
+        }
+
+        .hud-container {
+            display: grid;
+            grid-template-columns: 25% 50% 25%;
+            grid-template-rows: 15% 70% 15%;
+            width: 100%;
+            height: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            gap: 10px;
+        }
+
+        /* Responsive adjustments for portrait mode */
+        @media (max-aspect-ratio: 1/1) {
+            .hud-container {
+                grid-template-columns: 100%;
+                grid-template-rows: 25% 40% 35%;
+            }
+            .left-panel, .right-panel {
+                display: flex;
+                flex-direction: row;
+                justify-content: space-between;
+                overflow: hidden;
+            }
+            .panel-box { margin-bottom: 0; margin-right: 10px; flex: 1; }
+            .panel-box:last-child { margin-right: 0; }
+        }
+
+        .panel-box {
+            border: var(--border-style);
+            background: rgba(10, 51, 10, 0.3);
+            box-shadow: inset 0 0 15px rgba(57, 255, 20, 0.2);
+            padding: 10px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Decorative Corners */
+        .panel-box::before, .panel-box::after {
+            content: ''; position: absolute; width: 10px; height: 10px; border: 2px solid #fff; pointer-events: none; opacity: 0.5;
+        }
+        .panel-box::before { top: 0; left: 0; border-right: none; border-bottom: none; }
+        .panel-box::after { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+        .header {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: var(--border-style);
+            font-size: 2rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .center-panel {
+            grid-column: 2;
+            grid-row: 2;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: var(--border-style);
+            background: radial-gradient(circle, rgba(57,255,20,0.1) 0%, rgba(2,8,2,1) 70%);
+        }
+        
+        @media (max-aspect-ratio: 1/1) {
+            .center-panel { grid-column: 1; grid-row: 2; }
+        }
+
+        #three-canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 10;
+            filter: drop-shadow(0 0 8px var(--neon-green));
+            cursor: pointer;
+        }
+
+        .target-reticle {
+            position: absolute;
+            width: 80%; height: 80%;
+            border: 1px dashed rgba(57,255,20,0.3);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 5;
+            animation: spin-slow 20s linear infinite;
+        }
+
+        @keyframes spin-slow { 100% { transform: rotate(360deg); } }
+
+        .data-title { font-size: 1.2rem; border-bottom: 1px solid var(--neon-green); margin-bottom: 5px; padding-bottom: 2px;}
+        .data-content { font-size: 1.5rem; flex-grow: 1; }
+        
+        .progress-bar-container { width: 100%; height: 20px; border: 1px solid var(--neon-green); margin-top: 5px; position: relative; }
+        .progress-bar-fill { height: 100%; background-color: var(--neon-green); width: 50%; transition: width 0.2s; box-shadow: 0 0 10px var(--neon-green);}
+        
+        canvas.viz-canvas { width: 100%; height: 100%; display: block; }
+        
+        .hex-dump { font-size: 1rem; line-height: 1.1; overflow: hidden; white-space: nowrap; }
+
+        .footer {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            font-size: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="scanlines"></div>
+    <div class="flicker"></div>
+
+    <div class="hud-container">
+        <!-- HEADER -->
+        <div class="header panel-box" style="grid-row: 1;">
+            <div>SYS.CORE // V 9.2.4</div>
+            <div id="clock">00:00:00:00</div>
+            <div>STATUS: <span style="animation: blink 1s infinite;">ONLINE</span></div>
+        </div>
+
+        <!-- LEFT PANEL -->
+        <div class="left-panel" style="grid-column: 1; grid-row: 2; display: flex; flex-direction: column;">
+            <div class="panel-box">
+                <div class="data-title">ENERGY CORE</div>
+                <div class="data-content" style="display: flex; flex-direction: column; justify-content: space-around;">
+                    <div>PWR<div class="progress-bar-container"><div class="progress-bar-fill" id="pwr-bar" style="width: 87%;"></div></div></div>
+                    <div>SHD<div class="progress-bar-container"><div class="progress-bar-fill" id="shd-bar" style="width: 42%;"></div></div></div>
+                    <div>AUX<div class="progress-bar-container"><div class="progress-bar-fill" id="aux-bar" style="width: 95%;"></div></div></div>
+                </div>
+            </div>
+            <div class="panel-box" style="margin-top: 10px; flex-grow: 1;">
+                <div class="data-title">AUDIO FREQ</div>
+                <div class="data-content">
+                    <canvas id="barsCanvas" class="viz-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER PANEL (3D) -->
+        <div class="center-panel">
+            <div class="target-reticle"></div>
+            <div id="three-canvas-container"></div>
+            <div style="position: absolute; bottom: 10px; z-index: 20; background: var(--bg-color); padding: 0 5px; font-size: 1.2rem;">TARGET LOCK AQUIRED</div>
+        </div>
+
+        <!-- RIGHT PANEL -->
+        <div class="right-panel" style="grid-column: 3; grid-row: 2; display: flex; flex-direction: column;">
+            <div class="panel-box" style="height: 40%;">
+                <div class="data-title">BIOMETRICS</div>
+                <div class="data-content">
+                    <canvas id="waveCanvas" class="viz-canvas"></canvas>
+                </div>
+            </div>
+            <div class="panel-box" style="margin-top: 10px; flex-grow: 1;">
+                <div class="data-title">MEM DUMP</div>
+                <div class="data-content hex-dump" id="hex-container">
+                    <!-- Hex data injected by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer panel-box" style="grid-row: 3;">
+            <div id="sys-msg">BOOT SEQUENCE COMPLETE... WAITING FOR INPUT...</div>
+            <div>[ <span id="random-coord">X: 104 Y: -34 Z: 99</span> ]</div>
+        </div>
+    </div>
+
+    <script>
+        // --- THREE.JS SETUP ---
+        const container = document.getElementById('three-canvas-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        // Geometries array for interaction
+        const geometries = [
+            new THREE.TorusKnotGeometry(10, 2.5, 120, 16),
+            new THREE.IcosahedronGeometry(12, 1),
+            new THREE.SphereGeometry(12, 16, 16),
+            new THREE.CylinderGeometry(8, 8, 20, 16, 4, true)
+        ];
+        let currentGeoIndex = 0;
+
+        const material = new THREE.MeshBasicMaterial({ 
+            color: 0x39ff14, 
+            wireframe: true,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        let coreMesh = new THREE.Mesh(geometries[0], material);
+        scene.add(coreMesh);
+
+        camera.position.z = 35;
+
+        function animateThreeJS() {
+            requestAnimationFrame(animateThreeJS);
+            coreMesh.rotation.x += 0.005;
+            coreMesh.rotation.y += 0.01;
+            coreMesh.rotation.z += 0.002;
+            renderer.render(scene, camera);
+        }
+
+        // Tap to change shape!
+        container.addEventListener('mousedown', changeShape);
+        container.addEventListener('touchstart', (e) => { e.preventDefault(); changeShape(); }, {passive: false});
+
+        function changeShape() {
+            currentGeoIndex = (currentGeoIndex + 1) % geometries.length;
+            scene.remove(coreMesh);
+            coreMesh.geometry.dispose(); // clean up memory
+            coreMesh = new THREE.Mesh(geometries[currentGeoIndex], material);
+            
+            // Randomize rotation on change for chaotic effect
+            coreMesh.rotation.x = Math.random() * Math.PI;
+            coreMesh.rotation.y = Math.random() * Math.PI;
+            scene.add(coreMesh);
+            
+            // Flash effect
+            document.querySelector('.center-panel').style.background = 'radial-gradient(circle, rgba(57,255,20,0.5) 0%, rgba(2,8,2,1) 70%)';
+            setTimeout(() => {
+                document.querySelector('.center-panel').style.background = 'radial-gradient(circle, rgba(57,255,20,0.1) 0%, rgba(2,8,2,1) 70%)';
+            }, 100);
+        }
+
+        // --- WAVEFORM CANVAS (Biometrics / Sine Wave) ---
+        const waveCanvas = document.getElementById('waveCanvas');
+        const waveCtx = waveCanvas.getContext('2d');
+        let waveOffset = 0;
+
+        function resizeCanvases() {
+            waveCanvas.width = waveCanvas.parentElement.clientWidth;
+            waveCanvas.height = waveCanvas.parentElement.clientHeight;
+            barsCanvas.width = barsCanvas.parentElement.clientWidth;
+            barsCanvas.height = barsCanvas.parentElement.clientHeight;
+            
+            // update threejs camera
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+        window.addEventListener('resize', resizeCanvases);
+
+        function drawWaveform() {
+            waveCtx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
+            waveCtx.beginPath();
+            waveCtx.strokeStyle = '#39ff14';
+            waveCtx.lineWidth = 2;
+
+            const centerY = waveCanvas.height / 2;
+            const amplitude = waveCanvas.height * 0.3;
+
+            for (let x = 0; x < waveCanvas.width; x++) {
+                // Combine sine waves and some noise for an ECG-like tech look
+                let y = centerY + Math.sin(x * 0.05 + waveOffset) * amplitude;
+                
+                // Add sporadic spikes
+                if (Math.random() > 0.99) y += (Math.random() - 0.5) * 40;
+
+                if (x === 0) waveCtx.moveTo(x, y);
+                else waveCtx.lineTo(x, y);
+            }
+            waveCtx.stroke();
+            waveOffset += 0.1;
+            requestAnimationFrame(drawWaveform);
+        }
+
+        // --- BARS CANVAS (Audio Freq style) ---
+        const barsCanvas = document.getElementById('barsCanvas');
+        const barsCtx = barsCanvas.getContext('2d');
+        const barCounts = 16;
+        let barValues = new Array(barCounts).fill(0);
+
+        function drawBars() {
+            barsCtx.clearRect(0, 0, barsCanvas.width, barsCanvas.height);
+            const barWidth = (barsCanvas.width / barCounts) - 2;
+            
+            barsCtx.fillStyle = '#39ff14';
+            
+            for (let i = 0; i < barCounts; i++) {
+                // Lerp towards a random target for smooth(ish) jitter
+                if (Math.random() > 0.8) {
+                    barValues[i] = Math.random() * barsCanvas.height;
+                } else {
+                    barValues[i] = Math.max(0, barValues[i] - 2); // decay
+                }
+
+                const height = barValues[i];
+                barsCtx.fillRect(i * (barWidth + 2), barsCanvas.height - height, barWidth, height);
+            }
+            setTimeout(() => requestAnimationFrame(drawBars), 50); // slower framerate for bars
+        }
+
+        // --- HEX DUMP ---
+        const hexContainer = document.getElementById('hex-container');
+        function updateHex() {
+            let lines = [];
+            for(let i=0; i<10; i++) {
+                let line = "0x" + Math.floor(Math.random()*16777215).toString(16).toUpperCase().padStart(4, '0') + " ";
+                for(let j=0; j<4; j++) {
+                    line += Math.floor(Math.random()*255).toString(16).toUpperCase().padStart(2, '0') + " ";
+                }
+                lines.push(line);
+            }
+            hexContainer.innerHTML = lines.join('<br>');
+        }
+        setInterval(updateHex, 200);
+
+        // --- PROGRESS BARS & MISC DATA ---
+        setInterval(() => {
+            document.getElementById('pwr-bar').style.width = (70 + Math.random() * 30) + '%';
+            document.getElementById('shd-bar').style.width = (20 + Math.random() * 80) + '%';
+            
+            const msgs = [
+                "SCANNING SECTOR 7G...", 
+                "RECALIBRATING SENSORS...", 
+                "TARGET TRACKING ACTIVE", 
+                "WARNING: SUBROUTINE FAILED",
+                "ALL SYSTEMS NOMINAL"
+            ];
+            if(Math.random() > 0.7) {
+                document.getElementById('sys-msg').innerText = msgs[Math.floor(Math.random() * msgs.length)];
+            }
+
+            document.getElementById('random-coord').innerText = `X: ${Math.floor(Math.random()*200-100)} Y: ${Math.floor(Math.random()*200-100)} Z: ${Math.floor(Math.random()*200-100)}`;
+        }, 1500);
+
+        // --- CLOCK ---
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').innerText = 
+                now.getHours().toString().padStart(2, '0') + ":" + 
+                now.getMinutes().toString().padStart(2, '0') + ":" + 
+                now.getSeconds().toString().padStart(2, '0') + ":" + 
+                Math.floor(now.getMilliseconds()/10).toString().padStart(2, '0');
+            requestAnimationFrame(updateClock);
+        }
+
+        window.onload = function() {
+            resizeCanvases();
+            animateThreeJS();
+            drawWaveform();
+            drawBars();
+            updateHex();
+            updateClock();
+        };
+
+        // Add a global blink animation for CSS
+        const style = document.createElement('style');
+        style.innerHTML = `
+            @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+        `;
+        document.head.appendChild(style);
+
+    </script>
+</body>
+</html>
