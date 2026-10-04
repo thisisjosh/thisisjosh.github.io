@@ -10,6 +10,7 @@
     <style>
         :root {
             --neon-green: #39ff14;
+            --neon-rgb: 57, 255, 20;
             --dark-green: #0a330a;
             --bg-color: #020802;
             --border-style: 2px solid var(--neon-green);
@@ -42,7 +43,7 @@
             pointer-events: none;
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(57, 255, 20, 0.02);
+            background: rgba(var(--neon-rgb), 0.02);
             z-index: 999;
         }
 
@@ -59,14 +60,18 @@
             height: 100%;
             padding: 15px;
             box-sizing: border-box;
-            gap: 15px;
+            gap: 0;
             transition: transform 0.1s;
         }
+
+        .hud-container > * + * { margin-top: 22px; }
+        .hud-container > * { box-sizing: border-box; min-height: 0; }
 
         .panel-box {
             border: var(--border-style);
             background: rgba(10, 30, 10, 0.4);
             padding: 10px;
+            min-height: 0;
             position: relative;
             display: flex;
             flex-direction: column;
@@ -82,13 +87,18 @@
 
         .header {
             display: flex;
+            flex-direction: row;
             justify-content: space-between;
             align-items: center;
             border-bottom: var(--border-style);
             font-size: 2rem;
             letter-spacing: 2px;
-            flex: 0 0 12%; /* Taller to prevent text cutoff */
+            flex: 0 0 12%; 
         }
+
+        .header > div,
+        .btn-link { white-space: nowrap; }
+        .btn-link { flex-shrink: 0; }
 
         .center-panel {
             position: relative;
@@ -96,11 +106,12 @@
             justify-content: center;
             align-items: center;
             border: var(--border-style);
-            background: radial-gradient(circle, rgba(57,255,20,0.1) 0%, rgba(2,8,2,1) 70%);
+            background: radial-gradient(circle, rgba(var(--neon-rgb), 0.1) 0%, var(--bg-color) 70%);
             flex: 0 0 30%;
         }
         
-        .row { display: flex; flex-direction: row; gap: 15px; flex: 0 0 19%; }
+        .row { display: flex; flex-direction: row; flex: 0 0 19%; }
+        .row > .panel-box + .panel-box { margin-left: 15px; }
 
         #three-canvas-container {
             width: 100%;
@@ -113,7 +124,7 @@
         .target-reticle {
             position: absolute;
             width: 80%; height: 80%;
-            border: 1px dashed rgba(57,255,20,0.3);
+            border: 1px dashed rgba(var(--neon-rgb), 0.3);
             border-radius: 50%;
             pointer-events: none;
             z-index: 5;
@@ -124,6 +135,8 @@
 
         .data-title { font-size: 1.2rem; border-bottom: 1px solid var(--neon-green); margin-bottom: 5px; padding-bottom: 2px;}
         .data-content { font-size: 1.5rem; flex-grow: 1; position: relative; }
+        .energy-content { box-sizing: border-box; padding-bottom: 7px; font-size: 1.15rem; justify-content: space-between !important; }
+        .energy-content .progress-bar-container { height: 16px; margin-top: 2px; }
         
         .progress-bar-container { width: 100%; height: 20px; border: 1px solid var(--neon-green); margin-top: 5px; position: relative; }
         .progress-bar-fill { height: 100%; background-color: var(--neon-green); width: 50%; transition: width 0.2s; }
@@ -190,7 +203,7 @@
         <div class="row">
             <div class="panel-box">
                 <div class="data-title">ENERGY CORE</div>
-                <div class="data-content" style="display: flex; flex-direction: column; justify-content: space-around;">
+                <div class="data-content energy-content" style="display: flex; flex-direction: column; justify-content: space-around;">
                     <div>PWR<div class="progress-bar-container"><div class="progress-bar-fill" id="pwr-bar" style="width: 87%;"></div></div></div>
                     <div>SHD<div class="progress-bar-container"><div class="progress-bar-fill" id="shd-bar" style="width: 42%;"></div></div></div>
                     <div>AUX<div class="progress-bar-container"><div class="progress-bar-fill" id="aux-bar" style="width: 95%;"></div></div></div>
@@ -235,10 +248,129 @@
     </div>
 
     <script>
-        // --- GLOBAL SENSOR STATES ---
-        var touch1Active = false;
-        var touch2Active = false;
-        var touch3Active = false;
+        // --- WEB AUDIO API (Robot Sound Generator) ---
+        var audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playRobotSound(type) {
+            initAudio();
+            if (!audioCtx || audioCtx.state !== 'running') return;
+
+            var now = audioCtx.currentTime;
+
+            function playTone(startFrequency, endFrequency, startTime, duration, waveform, volume) {
+                var osc = audioCtx.createOscillator();
+                var gain = audioCtx.createGain();
+                osc.type = waveform;
+                osc.frequency.setValueAtTime(startFrequency, startTime);
+                osc.frequency.exponentialRampToValueAtTime(endFrequency, startTime + duration);
+                gain.gain.setValueAtTime(volume, startTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(startTime);
+                osc.stop(startTime + duration);
+            }
+
+            if (type === 'beep') {
+                var melodies = [
+                    [0, 7, 12, 7],
+                    [0, 4, 11, 16],
+                    [0, -5, 2, 7],
+                    [0, 12, 7, 19]
+                ];
+                var melody = melodies[Math.floor(Math.random() * melodies.length)];
+                var startingPitch = 430 + Math.random() * 400;
+                var noteSpacing = 0.075 + Math.random() * 0.07;
+                for (var note = 0; note < melody.length; note++) {
+                    var notePitch = startingPitch * Math.pow(2, melody[note] / 12);
+                    playTone(notePitch, notePitch * 1.04, now + note * noteSpacing, 0.065 + Math.random() * 0.045, 'square', 0.045);
+                }
+            }
+            else if (type === 'boop') {
+                var boopPatterns = [
+                    [0, -7, -2],
+                    [0, 12, 5, -5],
+                    [0, -12, 7],
+                    [0, 5, -7, 0]
+                ];
+                var boopPattern = boopPatterns[Math.floor(Math.random() * boopPatterns.length)];
+                var boopPitch = 125 + Math.random() * 190;
+                var boopSpacing = 0.095 + Math.random() * 0.09;
+                var boopWaveform = Math.random() > 0.5 ? 'triangle' : 'sawtooth';
+                for (var boopNote = 0; boopNote < boopPattern.length; boopNote++) {
+                    var boopFrequency = boopPitch * Math.pow(2, boopPattern[boopNote] / 12);
+                    var wobble = 0.68 + Math.random() * 0.75;
+                    playTone(boopFrequency, boopFrequency * wobble, now + boopNote * boopSpacing, 0.11 + Math.random() * 0.08, boopWaveform, 0.055);
+                }
+            }
+            else if (type === 'ghost') {
+                var ghostPitch = 300 + Math.random() * 320;
+                var ghostIntervals = [0.5, 0.667, 0.75, 1.25, 1.5];
+                var ghostInterval = ghostIntervals[Math.floor(Math.random() * ghostIntervals.length)];
+                var ghostDuration = 0.28 + Math.random() * 0.16;
+                playTone(ghostPitch, ghostPitch * (0.82 + Math.random() * 0.18), now, ghostDuration, 'sine', 0.045);
+                playTone(ghostPitch * ghostInterval, ghostPitch * ghostInterval * (1.05 + Math.random() * 0.12), now + 0.12, ghostDuration, 'sine', 0.035);
+                playTone(ghostPitch * 0.5, ghostPitch * (0.55 + Math.random() * 0.15), now + 0.24, ghostDuration * 0.85, 'triangle', 0.025);
+            }
+            else if (type === 'magic') {
+                var spellPatterns = [
+                    [0, 7, 12, 19],
+                    [0, 12, 7, 16],
+                    [0, 5, 12, 17],
+                    [0, 9, 16, 12]
+                ];
+                var spellPattern = spellPatterns[Math.floor(Math.random() * spellPatterns.length)];
+                var spellPitch = 520 + Math.random() * 420;
+                var spellSpacing = 0.085 + Math.random() * 0.045;
+                for (var spellNote = 0; spellNote < spellPattern.length; spellNote++) {
+                    var spellFrequency = spellPitch * Math.pow(2, spellPattern[spellNote] / 12);
+                    playTone(spellFrequency, spellFrequency * 0.98, now + spellNote * spellSpacing, 0.14 + Math.random() * 0.08, 'triangle', 0.035);
+                }
+            }
+            else if (type === 'glitch') {
+                var burstCount = 3 + Math.floor(Math.random() * 4);
+                for (var burst = 0; burst < burstCount; burst++) {
+                    var pitch = 240 + Math.random() * 1000;
+                    playTone(pitch, pitch * (Math.random() > 0.5 ? 1.2 : 0.8), now + burst * 0.045, 0.04, 'square', 0.045);
+                }
+            }
+        }
+
+        // --- GLOBAL SENSOR STATES & THEMES ---
+        var touch1WasActive = false;
+        var touch2WasActive = false;
+        var touch3WasActive = false;
+        var touch6WasActive = false;
+        var touch4WasActive = false;
+        var touchSoundIndex = 0;
+
+        function playActiveTouchSound() {
+            var activeSounds = [];
+            if (touch1WasActive) activeSounds.push('beep');
+            if (touch2WasActive) activeSounds.push('ghost');
+            if (touch3WasActive) activeSounds.push('glitch');
+            if (touch6WasActive) activeSounds.push('boop');
+            if (touch4WasActive) activeSounds.push('magic');
+
+            if (activeSounds.length === 0) return;
+            playRobotSound(activeSounds[touchSoundIndex % activeSounds.length]);
+            touchSoundIndex++;
+        }
+
+        setInterval(playActiveTouchSound, 520);
+
+        var currentTheme = 'green'; 
+        var themeColor = '#39ff14';
+        var themeDark = '#0a330a';
 
         var rotSpeedBaseX = 0.005;
         var rotSpeedBaseY = 0.01;
@@ -251,16 +383,14 @@
         var scene = new THREE.Scene();
         var camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
         
-        // Strict optimizations: No antialiasing, hard pixel ratio of 1 for older A7 chip
         var renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false });
         renderer.setPixelRatio(1); 
         renderer.setSize(container.clientWidth, container.clientHeight);
         container.appendChild(renderer.domElement);
 
-        // Basic Icosahedron geometry as requested
         var geometry = new THREE.IcosahedronGeometry(12, 0); 
         var material = new THREE.MeshBasicMaterial({ 
-            color: 0x39ff14, 
+            color: themeColor, 
             wireframe: true
         });
         
@@ -271,7 +401,6 @@
         function animateThreeJS() {
             requestAnimationFrame(animateThreeJS);
             
-            // Apply speed multiplier based on BLE touch 1
             coreMesh.rotation.x += (rotSpeedBaseX * currentSpeedMult);
             coreMesh.rotation.y += (rotSpeedBaseY * currentSpeedMult);
             coreMesh.rotation.z += (0.002 * currentSpeedMult);
@@ -300,32 +429,26 @@
         window.addEventListener('resize', resizeCanvases);
 
         function drawWaveform() {
-            // Solid background draw (Performance boost over clearRect/alpha)
-            waveCtx.fillStyle = '#0a330a'; 
+            waveCtx.fillStyle = themeDark; 
             waveCtx.fillRect(0, 0, waveCanvas.width, waveCanvas.height);
             
             waveCtx.beginPath();
-            waveCtx.strokeStyle = touch2Active ? '#ff0000' : '#39ff14'; // Color shifts if spiked
-            waveCtx.lineWidth = touch2Active ? 4 : 2;
+            waveCtx.strokeStyle = touch2WasActive ? '#ff0000' : themeColor; 
+            waveCtx.lineWidth = touch2WasActive ? 4 : 2;
 
             var centerY = waveCanvas.height / 2;
             var baseAmplitude = waveCanvas.height * 0.25;
             
-            // Apply amplitude multiplier from BLE touch 2
             var amplitude = baseAmplitude * waveAmpMult;
 
-            // Step by 3 pixels for performance
             for (var x = 0; x < waveCanvas.width; x += 3) {
                 var y = centerY + Math.sin(x * 0.05 + waveOffset) * amplitude;
-                
-                // Add sporadic spikes for effect
                 if (Math.random() > 0.98) y += (Math.random() - 0.5) * (40 * waveAmpMult);
-
                 if (x === 0) waveCtx.moveTo(x, y);
                 else waveCtx.lineTo(x, y);
             }
             waveCtx.stroke();
-            waveOffset += (touch2Active ? 0.4 : 0.15); // Move faster if touched
+            waveOffset += (touch2WasActive ? 0.4 : 0.15); 
             requestAnimationFrame(drawWaveform);
         }
 
@@ -337,11 +460,11 @@
         for(var i=0; i<barCounts; i++) barValues[i] = 0;
 
         function drawBars() {
-            barsCtx.fillStyle = '#0a330a';
+            barsCtx.fillStyle = themeDark;
             barsCtx.fillRect(0, 0, barsCanvas.width, barsCanvas.height);
             var barWidth = (barsCanvas.width / barCounts) - 2;
             
-            barsCtx.fillStyle = '#39ff14';
+            barsCtx.fillStyle = themeColor;
             
             for (var i = 0; i < barCounts; i++) {
                 if (Math.random() > 0.8) {
@@ -354,6 +477,26 @@
             }
             setTimeout(function() { requestAnimationFrame(drawBars) }, 60);
         }
+
+        // --- ENERGY BARS CONTINUOUS FLUCTUATION ---
+        function updateEnergyBars() {
+            var pwrBar = document.getElementById('pwr-bar');
+            var shdBar = document.getElementById('shd-bar');
+            var auxBar = document.getElementById('aux-bar');
+
+            var currentPwr = parseFloat(pwrBar.style.width) || 80;
+            var currentShd = parseFloat(shdBar.style.width) || 50;
+            var currentAux = parseFloat(auxBar.style.width) || 90;
+
+            currentPwr = Math.min(100, Math.max(40, currentPwr + (Math.random() * 10 - 5)));
+            currentShd = Math.min(100, Math.max(20, currentShd + (Math.random() * 14 - 7)));
+            currentAux = Math.min(100, Math.max(50, currentAux + (Math.random() * 6 - 3)));
+
+            pwrBar.style.width = currentPwr + '%';
+            shdBar.style.width = currentShd + '%';
+            auxBar.style.width = currentAux + '%';
+        }
+        setInterval(updateEnergyBars, 400);
 
         // --- HEX DUMP ---
         var hexContainer = document.getElementById('hex-container');
@@ -386,6 +529,20 @@
             requestAnimationFrame(updateClock);
         }
 
+        // --- THEME ENGINE ---
+        function updateTheme(hex, rgb, dark, speed, msg) {
+            themeColor = hex;
+            themeDark = dark;
+            
+            document.documentElement.style.setProperty('--neon-green', hex);
+            document.documentElement.style.setProperty('--neon-rgb', rgb);
+            document.documentElement.style.setProperty('--dark-green', dark);
+            
+            material.color.set(hex);
+            currentSpeedMult = speed;
+            document.getElementById('target-lock-msg').innerText = msg;
+        }
+
         // --- BLUETOOTH / ESP32 INTEGRATION ---
         var bleButton = document.getElementById('ble-btn');
         var hudContainer = document.getElementById('main-hud');
@@ -394,6 +551,8 @@
         var BLE_CHAR_UUID    = '19b10001-e8f2-537e-4f6c-d104768a1214';
 
         bleButton.addEventListener('click', function() {
+            initAudio(); // Unlock audio context via user click on button
+
             if (!navigator.bluetooth) {
                 document.getElementById('sys-msg').innerText = "ERR: WEB BLUETOOTH API UNAVAILABLE (USE BLUEFY BROWSER)";
                 bleButton.innerText = "NO BLE";
@@ -403,7 +562,6 @@
             bleButton.innerText = "SCANNING...";
             document.getElementById('sys-msg').innerText = "INITIATING HANDSHAKE WITH SENSOR HUB...";
 
-            // Using standard Promises for better compatibility
             navigator.bluetooth.requestDevice({
                 filters: [{ services: [BLE_SERVICE_UUID] }]
             })
@@ -423,12 +581,12 @@
                 return characteristic.startNotifications().then(function() {
                     characteristic.addEventListener('characteristicvaluechanged', handleSensorData);
                     
-                    // UI Updates on success
                     bleButton.innerText = "LINKED";
                     bleButton.classList.add('connected');
                     document.getElementById('status-text').innerText = "ONLINE";
                     document.getElementById('sys-msg').innerText = "LINK ESTABLISHED. RECEIVING SENSOR TELEMETRY.";
                     document.getElementById('target-lock-msg').innerText = "SENSORS CALIBRATED";
+                    playRobotSound('beep');
                 });
             })
             .catch(function(error) {
@@ -438,70 +596,91 @@
             });
         });
 
-        // Handle incoming BLE data (3-byte array)
+        // Handle incoming BLE data (5-byte array)
         function handleSensorData(event) {
             var dataView = event.target.value;
             
-            // Safety check: ensure we received at least 3 bytes
-            if (dataView.byteLength < 3) return; 
+            if (dataView.byteLength < 5) return; 
             
-            var b0 = dataView.getUint8(0); // Touch 1
-            var b1 = dataView.getUint8(1); // Touch 2
-            var b2 = dataView.getUint8(2); // Touch 3
+            var b0 = dataView.getUint8(0); // Touch 1 (Red)
+            var b1 = dataView.getUint8(1); // Touch 2 (Waveform)
+            var b2 = dataView.getUint8(2); // Touch 3 (Glitch)
+            var b3 = dataView.getUint8(3); // Touch 6 (Orange)
+            var b4 = dataView.getUint8(4); // Touch 4 (Purple)
 
-            // --- PROCESS BYTE 0 (Touch 1): Color & Speed ---
+            // --- PROCESS GLOBAL COLOR & SPEED THEMES WITH SOUNDS ---
             if (b0 === 1) {
-                if (!touch1Active) {
-                    touch1Active = true;
-                    material.color.setHex(0xff0000); // Red
-                    currentSpeedMult = 15.0; // Fast spin
-                    document.getElementById('center-bg').style.background = 'radial-gradient(circle, rgba(255,0,0,0.2) 0%, rgba(2,8,2,1) 70%)';
-                    document.getElementById('target-lock-msg').innerText = "CRITICAL: CORE OVERLOAD";
-                    document.getElementById('target-lock-msg').style.color = "#ff0000";
+                if (!touch1WasActive) {
+                    touch1WasActive = true;
+                    currentTheme = 'red';
+                    updateTheme('#ff0000', '255, 0, 0', '#330000', 15.0, "CRITICAL: CORE OVERLOAD");
                 }
             } else {
-                if (touch1Active) {
-                    touch1Active = false;
-                    material.color.setHex(0x39ff14); // Green
-                    currentSpeedMult = 1.0; // Normal spin
-                    document.getElementById('center-bg').style.background = 'radial-gradient(circle, rgba(57,255,20,0.1) 0%, rgba(2,8,2,1) 70%)';
-                    document.getElementById('target-lock-msg').innerText = "CORE NOMINAL";
-                    document.getElementById('target-lock-msg').style.color = "var(--neon-green)";
+                touch1WasActive = false;
+            }
+
+            if (b3 === 1) {
+                if (!touch6WasActive) {
+                    touch6WasActive = true;
+                    currentTheme = 'orange';
+                    updateTheme('#ffa500', '255, 165, 0', '#332000', 1.0, "AUXILIARY POWER");
+                }
+            } else {
+                touch6WasActive = false;
+            }
+
+            if (b4 === 1) {
+                if (!touch4WasActive) {
+                    touch4WasActive = true;
+                    currentTheme = 'purple';
+                    updateTheme('#800080', '128, 0, 128', '#1a001a', 1.0, "STEALTH PROTOCOL");
+                }
+            } else {
+                touch4WasActive = false;
+            }
+
+            // Fallback to green if none of the color triggers are active
+            if (b0 === 0 && b3 === 0 && b4 === 0) {
+                if (currentTheme !== 'green') {
+                    currentTheme = 'green';
+                    updateTheme('#39ff14', '57, 255, 20', '#0a330a', 1.0, "CORE NOMINAL");
                 }
             }
 
             // --- PROCESS BYTE 1 (Touch 2): Waveform Amplitude ---
             if (b1 === 1) {
-                touch2Active = true;
-                waveAmpMult = 3.5; // Max amplitude
+                if (!touch2WasActive) {
+                    touch2WasActive = true;
+                }
+                waveAmpMult = 3.5; 
             } else {
-                touch2Active = false;
+                touch2WasActive = false;
                 waveAmpMult = 1.0;
             }
 
             // --- PROCESS BYTE 2 (Touch 3): Glitch Effect ---
             if (b2 === 1) {
-                if (!touch3Active) {
-                    touch3Active = true;
+                if (!touch3WasActive) {
+                    touch3WasActive = true;
                     hudContainer.classList.add('glitch-active');
                 }
             } else {
-                if (touch3Active) {
-                    touch3Active = false;
+                if (touch3WasActive) {
+                    touch3WasActive = false;
                     hudContainer.classList.remove('glitch-active');
                 }
             }
             
-            // Randomize progress bars on any touch input
-            if (b0 === 1 || b1 === 1 || b2 === 1) {
-                document.getElementById('pwr-bar').style.width = (70 + Math.random() * 30) + '%';
-                document.getElementById('shd-bar').style.width = (20 + Math.random() * 80) + '%';
+            // Give an extra boost to energy bars on any touch input
+            if (b0 === 1 || b1 === 1 || b2 === 1 || b3 === 1 || b4 === 1) {
+                document.getElementById('pwr-bar').style.width = (80 + Math.random() * 20) + '%';
+                document.getElementById('shd-bar').style.width = (40 + Math.random() * 60) + '%';
             }
         }
 
         window.onload = function() {
             resizeCanvases();
-            animateThreeJS();
+            animateString = animateThreeJS();
             drawWaveform();
             drawBars();
             updateHex();
