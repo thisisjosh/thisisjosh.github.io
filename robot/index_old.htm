@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Robot Status Screen - BLE Enabled</title>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        :root {
+            --neon-green: #39ff14;
+            --dark-green: #0a330a;
+            --bg-color: #020802;
+            --border-style: 2px solid var(--neon-green);
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: var(--neon-green);
+            font-family: 'VT323', monospace;
+            overflow: hidden;
+            text-shadow: 0 0 5px var(--neon-green);
+        }
+
+        /* CRT Scanline Overlay */
+        .scanlines {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.3));
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .flicker {
+            animation: crt-flicker 0.15s infinite;
+            pointer-events: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(57, 255, 20, 0.02);
+            z-index: 999;
+        }
+
+        @keyframes crt-flicker {
+            0% { opacity: 0.95; }
+            50% { opacity: 0.85; }
+            100% { opacity: 1; }
+        }
+
+        .hud-container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            padding: 15px;
+            box-sizing: border-box;
+            gap: 15px;
+            transition: transform 0.1s;
+        }
+
+        .panel-box {
+            border: var(--border-style);
+            background: rgba(10, 30, 10, 0.4);
+            padding: 10px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex: 1;
+        }
+
+        .panel-box::before, .panel-box::after {
+            content: ''; position: absolute; width: 10px; height: 10px; border: 2px solid #fff; pointer-events: none; opacity: 0.5;
+        }
+        .panel-box::before { top: 0; left: 0; border-right: none; border-bottom: none; }
+        .panel-box::after { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: var(--border-style);
+            font-size: 2rem;
+            letter-spacing: 2px;
+            flex: 0 0 12%; /* Taller to prevent text cutoff */
+        }
+
+        .center-panel {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: var(--border-style);
+            background: radial-gradient(circle, rgba(57,255,20,0.1) 0%, rgba(2,8,2,1) 70%);
+            flex: 0 0 30%;
+        }
+        
+        .row { display: flex; flex-direction: row; gap: 15px; flex: 0 0 19%; }
+
+        #three-canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 10;
+        }
+
+        .target-reticle {
+            position: absolute;
+            width: 80%; height: 80%;
+            border: 1px dashed rgba(57,255,20,0.3);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 5;
+            animation: spin-slow 20s linear infinite;
+        }
+
+        @keyframes spin-slow { 100% { transform: rotate(360deg); } }
+
+        .data-title { font-size: 1.2rem; border-bottom: 1px solid var(--neon-green); margin-bottom: 5px; padding-bottom: 2px;}
+        .data-content { font-size: 1.5rem; flex-grow: 1; position: relative; }
+        
+        .progress-bar-container { width: 100%; height: 20px; border: 1px solid var(--neon-green); margin-top: 5px; position: relative; }
+        .progress-bar-fill { height: 100%; background-color: var(--neon-green); width: 50%; transition: width 0.2s; }
+        
+        canvas.viz-canvas { width: 100%; height: 100%; display: block; position: absolute; top:0; left:0; }
+        
+        .hex-dump { font-size: 1.1rem; line-height: 1.1; overflow: hidden; white-space: nowrap; }
+
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            font-size: 1.5rem;
+            flex: 0 0 7%;
+            padding-bottom: 5px;
+        }
+
+        /* BLE Button Styling */
+        .btn-link {
+            background-color: var(--dark-green);
+            color: var(--neon-green);
+            border: 2px solid var(--neon-green);
+            font-family: 'VT323', monospace;
+            font-size: 1.5rem;
+            padding: 5px 15px;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+        .btn-link:active { background-color: var(--neon-green); color: var(--bg-color); }
+        .btn-link.connected { border-color: #00ffff; color: #00ffff; }
+
+        /* Glitch Effect activated by BLE */
+        .glitch-active {
+            animation: extreme-shake 0.1s infinite;
+            filter: hue-rotate(90deg) contrast(150%);
+        }
+        
+        @keyframes extreme-shake {
+            0% { transform: translate(5px, 5px) rotate(0deg); }
+            20% { transform: translate(-5px, 0px) rotate(1deg); }
+            40% { transform: translate(5px, -5px) rotate(-1deg); }
+            60% { transform: translate(-5px, 5px) rotate(0deg); }
+            80% { transform: translate(5px, -5px) rotate(1deg); }
+            100% { transform: translate(-5px, -5px) rotate(-1deg); }
+        }
+
+        #sys-msg { width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    </style>
+</head>
+<body>
+
+    <div class="scanlines"></div>
+    <div class="flicker"></div>
+
+    <div class="hud-container" id="main-hud">
+        <!-- HEADER -->
+        <div class="header panel-box">
+            <div>SYS.CORE // V 9.2.4</div>
+            <button id="ble-btn" class="btn-link">LINK SENSORS</button>
+            <div>STATUS: <span id="status-text" style="animation: blink 1s infinite;">STANDBY</span></div>
+        </div>
+
+        <!-- ROW 1: ENERGY & AUDIO -->
+        <div class="row">
+            <div class="panel-box">
+                <div class="data-title">ENERGY CORE</div>
+                <div class="data-content" style="display: flex; flex-direction: column; justify-content: space-around;">
+                    <div>PWR<div class="progress-bar-container"><div class="progress-bar-fill" id="pwr-bar" style="width: 87%;"></div></div></div>
+                    <div>SHD<div class="progress-bar-container"><div class="progress-bar-fill" id="shd-bar" style="width: 42%;"></div></div></div>
+                    <div>AUX<div class="progress-bar-container"><div class="progress-bar-fill" id="aux-bar" style="width: 95%;"></div></div></div>
+                </div>
+            </div>
+            <div class="panel-box">
+                <div class="data-title">AUDIO FREQ</div>
+                <div class="data-content">
+                    <canvas id="barsCanvas" class="viz-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER PANEL (3D) -->
+        <div class="center-panel" id="center-bg">
+            <div class="target-reticle"></div>
+            <div id="three-canvas-container"></div>
+            <div id="target-lock-msg" style="position: absolute; bottom: 10px; z-index: 20; background: var(--bg-color); padding: 0 5px; font-size: 1.2rem;">AWAITING SENSOR INPUT</div>
+        </div>
+
+        <!-- ROW 2: BIOMETRICS & MEMORY -->
+        <div class="row">
+            <div class="panel-box">
+                <div class="data-title">BIOMETRICS</div>
+                <div class="data-content">
+                    <canvas id="waveCanvas" class="viz-canvas"></canvas>
+                </div>
+            </div>
+            <div class="panel-box">
+                <div class="data-title">MEM DUMP</div>
+                <div class="data-content hex-dump" id="hex-container">
+                    <!-- Hex data injected by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer panel-box">
+            <div id="sys-msg">BOOT SEQUENCE COMPLETE... WAITING FOR SENSOR LINK...</div>
+            <div id="clock">00:00:00:00</div>
+        </div>
+    </div>
+
+    <script>
+        // --- GLOBAL SENSOR STATES ---
+        var touch1Active = false;
+        var touch2Active = false;
+        var touch3Active = false;
+
+        var rotSpeedBaseX = 0.005;
+        var rotSpeedBaseY = 0.01;
+        var currentSpeedMult = 1.0;
+        
+        var waveAmpMult = 1.0;
+
+        // --- THREE.JS SETUP ---
+        var container = document.getElementById('three-canvas-container');
+        var scene = new THREE.Scene();
+        var camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+        
+        // Strict optimizations: No antialiasing, hard pixel ratio of 1 for older A7 chip
+        var renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false });
+        renderer.setPixelRatio(1); 
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        // Basic Icosahedron geometry as requested
+        var geometry = new THREE.IcosahedronGeometry(12, 0); 
+        var material = new THREE.MeshBasicMaterial({ 
+            color: 0x39ff14, 
+            wireframe: true
+        });
+        
+        var coreMesh = new THREE.Mesh(geometry, material);
+        scene.add(coreMesh);
+        camera.position.z = 35;
+
+        function animateThreeJS() {
+            requestAnimationFrame(animateThreeJS);
+            
+            // Apply speed multiplier based on BLE touch 1
+            coreMesh.rotation.x += (rotSpeedBaseX * currentSpeedMult);
+            coreMesh.rotation.y += (rotSpeedBaseY * currentSpeedMult);
+            coreMesh.rotation.z += (0.002 * currentSpeedMult);
+            
+            renderer.render(scene, camera);
+        }
+
+        // --- WAVEFORM CANVAS (Biometrics) ---
+        var waveCanvas = document.getElementById('waveCanvas');
+        var waveCtx = waveCanvas.getContext('2d', { alpha: false }); 
+        var waveOffset = 0;
+
+        function resizeCanvases() {
+            var waveContainer = waveCanvas.parentElement;
+            waveCanvas.width = waveContainer.clientWidth;
+            waveCanvas.height = waveContainer.clientHeight;
+            
+            var barsContainer = barsCanvas.parentElement;
+            barsCanvas.width = barsContainer.clientWidth;
+            barsCanvas.height = barsContainer.clientHeight;
+            
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+        window.addEventListener('resize', resizeCanvases);
+
+        function drawWaveform() {
+            // Solid background draw (Performance boost over clearRect/alpha)
+            waveCtx.fillStyle = '#0a330a'; 
+            waveCtx.fillRect(0, 0, waveCanvas.width, waveCanvas.height);
+            
+            waveCtx.beginPath();
+            waveCtx.strokeStyle = touch2Active ? '#ff0000' : '#39ff14'; // Color shifts if spiked
+            waveCtx.lineWidth = touch2Active ? 4 : 2;
+
+            var centerY = waveCanvas.height / 2;
+            var baseAmplitude = waveCanvas.height * 0.25;
+            
+            // Apply amplitude multiplier from BLE touch 2
+            var amplitude = baseAmplitude * waveAmpMult;
+
+            // Step by 3 pixels for performance
+            for (var x = 0; x < waveCanvas.width; x += 3) {
+                var y = centerY + Math.sin(x * 0.05 + waveOffset) * amplitude;
+                
+                // Add sporadic spikes for effect
+                if (Math.random() > 0.98) y += (Math.random() - 0.5) * (40 * waveAmpMult);
+
+                if (x === 0) waveCtx.moveTo(x, y);
+                else waveCtx.lineTo(x, y);
+            }
+            waveCtx.stroke();
+            waveOffset += (touch2Active ? 0.4 : 0.15); // Move faster if touched
+            requestAnimationFrame(drawWaveform);
+        }
+
+        // --- BARS CANVAS ---
+        var barsCanvas = document.getElementById('barsCanvas');
+        var barsCtx = barsCanvas.getContext('2d', { alpha: false });
+        var barCounts = 16;
+        var barValues = new Array(barCounts);
+        for(var i=0; i<barCounts; i++) barValues[i] = 0;
+
+        function drawBars() {
+            barsCtx.fillStyle = '#0a330a';
+            barsCtx.fillRect(0, 0, barsCanvas.width, barsCanvas.height);
+            var barWidth = (barsCanvas.width / barCounts) - 2;
+            
+            barsCtx.fillStyle = '#39ff14';
+            
+            for (var i = 0; i < barCounts; i++) {
+                if (Math.random() > 0.8) {
+                    barValues[i] = Math.random() * barsCanvas.height;
+                } else {
+                    barValues[i] = Math.max(0, barValues[i] - 3); 
+                }
+                var height = barValues[i];
+                barsCtx.fillRect(i * (barWidth + 2), barsCanvas.height - height, barWidth, height);
+            }
+            setTimeout(function() { requestAnimationFrame(drawBars) }, 60);
+        }
+
+        // --- HEX DUMP ---
+        var hexContainer = document.getElementById('hex-container');
+        function updateHex() {
+            var lines = [];
+            for(var i=0; i<8; i++) {
+                var line = "0x" + Math.floor(Math.random()*16777215).toString(16).toUpperCase();
+                while(line.length < 6) line = "0" + line; 
+                line += " ";
+                for(var j=0; j<4; j++) {
+                    var chunk = Math.floor(Math.random()*255).toString(16).toUpperCase();
+                    if(chunk.length < 2) chunk = "0" + chunk;
+                    line += chunk + " ";
+                }
+                lines.push(line);
+            }
+            hexContainer.innerHTML = lines.join('<br>');
+        }
+        setInterval(updateHex, 350);
+
+        // --- CLOCK ---
+        function updateClock() {
+            var now = new Date();
+            var h = now.getHours().toString(); if(h.length<2) h="0"+h;
+            var m = now.getMinutes().toString(); if(m.length<2) m="0"+m;
+            var s = now.getSeconds().toString(); if(s.length<2) s="0"+s;
+            var ms = Math.floor(now.getMilliseconds()/10).toString(); if(ms.length<2) ms="0"+ms;
+            
+            document.getElementById('clock').innerText = h + ":" + m + ":" + s + ":" + ms;
+            requestAnimationFrame(updateClock);
+        }
+
+        // --- BLUETOOTH / ESP32 INTEGRATION ---
+        var bleButton = document.getElementById('ble-btn');
+        var hudContainer = document.getElementById('main-hud');
+        
+        var BLE_SERVICE_UUID = '19b10000-e8f2-537e-4f6c-d104768a1214';
+        var BLE_CHAR_UUID    = '19b10001-e8f2-537e-4f6c-d104768a1214';
+
+        bleButton.addEventListener('click', function() {
+            if (!navigator.bluetooth) {
+                document.getElementById('sys-msg').innerText = "ERR: WEB BLUETOOTH API UNAVAILABLE (USE BLUEFY BROWSER)";
+                bleButton.innerText = "NO BLE";
+                return;
+            }
+
+            bleButton.innerText = "SCANNING...";
+            document.getElementById('sys-msg').innerText = "INITIATING HANDSHAKE WITH SENSOR HUB...";
+
+            // Using standard Promises for better compatibility
+            navigator.bluetooth.requestDevice({
+                filters: [{ services: [BLE_SERVICE_UUID] }]
+            })
+            .then(function(device) {
+                document.getElementById('sys-msg').innerText = "DEVICE FOUND. CONNECTING GATT...";
+                return device.gatt.connect();
+            })
+            .then(function(server) {
+                document.getElementById('sys-msg').innerText = "GATT CONNECTED. REQUESTING SERVICE...";
+                return server.getPrimaryService(BLE_SERVICE_UUID);
+            })
+            .then(function(service) {
+                return service.getCharacteristic(BLE_CHAR_UUID);
+            })
+            .then(function(characteristic) {
+                document.getElementById('sys-msg').innerText = "CHARACTERISTIC ACQUIRED. STARTING NOTIFICATIONS...";
+                return characteristic.startNotifications().then(function() {
+                    characteristic.addEventListener('characteristicvaluechanged', handleSensorData);
+                    
+                    // UI Updates on success
+                    bleButton.innerText = "LINKED";
+                    bleButton.classList.add('connected');
+                    document.getElementById('status-text').innerText = "ONLINE";
+                    document.getElementById('sys-msg').innerText = "LINK ESTABLISHED. RECEIVING SENSOR TELEMETRY.";
+                    document.getElementById('target-lock-msg').innerText = "SENSORS CALIBRATED";
+                });
+            })
+            .catch(function(error) {
+                console.error(error);
+                bleButton.innerText = "LINK FAILED";
+                document.getElementById('sys-msg').innerText = "CONNECTION ERROR: " + error;
+            });
+        });
+
+        // Handle incoming BLE data (3-byte array)
+        function handleSensorData(event) {
+            var dataView = event.target.value;
+            
+            // Safety check: ensure we received at least 3 bytes
+            if (dataView.byteLength < 3) return; 
+            
+            var b0 = dataView.getUint8(0); // Touch 1
+            var b1 = dataView.getUint8(1); // Touch 2
+            var b2 = dataView.getUint8(2); // Touch 3
+
+            // --- PROCESS BYTE 0 (Touch 1): Color & Speed ---
+            if (b0 === 1) {
+                if (!touch1Active) {
+                    touch1Active = true;
+                    material.color.setHex(0xff0000); // Red
+                    currentSpeedMult = 15.0; // Fast spin
+                    document.getElementById('center-bg').style.background = 'radial-gradient(circle, rgba(255,0,0,0.2) 0%, rgba(2,8,2,1) 70%)';
+                    document.getElementById('target-lock-msg').innerText = "CRITICAL: CORE OVERLOAD";
+                    document.getElementById('target-lock-msg').style.color = "#ff0000";
+                }
+            } else {
+                if (touch1Active) {
+                    touch1Active = false;
+                    material.color.setHex(0x39ff14); // Green
+                    currentSpeedMult = 1.0; // Normal spin
+                    document.getElementById('center-bg').style.background = 'radial-gradient(circle, rgba(57,255,20,0.1) 0%, rgba(2,8,2,1) 70%)';
+                    document.getElementById('target-lock-msg').innerText = "CORE NOMINAL";
+                    document.getElementById('target-lock-msg').style.color = "var(--neon-green)";
+                }
+            }
+
+            // --- PROCESS BYTE 1 (Touch 2): Waveform Amplitude ---
+            if (b1 === 1) {
+                touch2Active = true;
+                waveAmpMult = 3.5; // Max amplitude
+            } else {
+                touch2Active = false;
+                waveAmpMult = 1.0;
+            }
+
+            // --- PROCESS BYTE 2 (Touch 3): Glitch Effect ---
+            if (b2 === 1) {
+                if (!touch3Active) {
+                    touch3Active = true;
+                    hudContainer.classList.add('glitch-active');
+                }
+            } else {
+                if (touch3Active) {
+                    touch3Active = false;
+                    hudContainer.classList.remove('glitch-active');
+                }
+            }
+            
+            // Randomize progress bars on any touch input
+            if (b0 === 1 || b1 === 1 || b2 === 1) {
+                document.getElementById('pwr-bar').style.width = (70 + Math.random() * 30) + '%';
+                document.getElementById('shd-bar').style.width = (20 + Math.random() * 80) + '%';
+            }
+        }
+
+        window.onload = function() {
+            resizeCanvases();
+            animateThreeJS();
+            drawWaveform();
+            drawBars();
+            updateHex();
+            updateClock();
+        };
+
+        var style = document.createElement('style');
+        style.innerHTML = "@keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }";
+        document.head.appendChild(style);
+
+    </script>
+</body>
+</html>

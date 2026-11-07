@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Robot Status Screen - 5 Sensor Edition</title>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        :root {
+            --neon-green: #39ff14;
+            --dark-green: #0a330a;
+            --bg-color: #020802;
+            --border-style: 2px solid var(--neon-green);
+            --danger-red: #ff003c;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: var(--neon-green);
+            font-family: 'VT323', monospace;
+            overflow: hidden;
+            text-shadow: 0 0 5px var(--neon-green);
+        }
+
+        /* CRT Scanline Overlay */
+        .scanlines {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.3));
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .flicker {
+            animation: crt-flicker 0.15s infinite;
+            pointer-events: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(57, 255, 20, 0.02);
+            z-index: 999;
+        }
+
+        @keyframes crt-flicker {
+            0% { opacity: 0.95; }
+            50% { opacity: 0.85; }
+            100% { opacity: 1; }
+        }
+
+        /* Strict flexbox layout for iPad portrait mode */
+        .hud-container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            padding: 15px;
+            box-sizing: border-box;
+            gap: 15px;
+            transition: transform 0.1s;
+        }
+
+        .panel-box {
+            border: var(--border-style);
+            background: rgba(10, 30, 10, 0.4);
+            padding: 10px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex: 1;
+        }
+
+        .panel-box::before, .panel-box::after {
+            content: ''; position: absolute; width: 10px; height: 10px; border: 2px solid #fff; pointer-events: none; opacity: 0.5;
+        }
+        .panel-box::before { top: 0; left: 0; border-right: none; border-bottom: none; }
+        .panel-box::after { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: var(--border-style);
+            font-size: 2rem;
+            letter-spacing: 2px;
+            flex: 0 0 12%; 
+        }
+
+        .center-panel {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: var(--border-style);
+            background: radial-gradient(circle, rgba(57,255,20,0.1) 0%, rgba(2,8,2,1) 70%);
+            flex: 0 0 30%;
+            overflow: hidden;
+        }
+        
+        .row { display: flex; flex-direction: row; gap: 15px; flex: 0 0 19%; }
+
+        #three-canvas-container {
+            width: 100%; height: 100%;
+            position: absolute; top: 0; left: 0; z-index: 10;
+        }
+
+        .target-reticle {
+            position: absolute; width: 80%; height: 80%;
+            border: 1px dashed rgba(57,255,20,0.3); border-radius: 50%;
+            pointer-events: none; z-index: 5;
+            animation: spin-slow 20s linear infinite;
+        }
+
+        @keyframes spin-slow { 100% { transform: rotate(360deg); } }
+
+        .data-title { font-size: 1.2rem; border-bottom: 1px solid var(--neon-green); margin-bottom: 5px; padding-bottom: 2px;}
+        .data-content { font-size: 1.5rem; flex-grow: 1; position: relative; }
+        
+        .progress-bar-container { width: 100%; height: 20px; border: 1px solid var(--neon-green); margin-top: 5px; position: relative; }
+        .progress-bar-fill { height: 100%; background-color: var(--neon-green); width: 50%; transition: width 0.2s; }
+        
+        canvas.viz-canvas { width: 100%; height: 100%; display: block; position: absolute; top:0; left:0; }
+        
+        .hex-dump { font-size: 1.1rem; line-height: 1.1; overflow: hidden; white-space: nowrap; }
+
+        .footer {
+            display: flex; justify-content: space-between; align-items: flex-end;
+            font-size: 1.5rem; flex: 0 0 7%; padding-bottom: 5px;
+        }
+
+        .btn-link {
+            background-color: var(--dark-green); color: var(--neon-green);
+            border: 2px solid var(--neon-green); font-family: 'VT323', monospace;
+            font-size: 1.5rem; padding: 5px 15px; cursor: pointer; text-transform: uppercase;
+        }
+        .btn-link:active { background-color: var(--neon-green); color: var(--bg-color); }
+        .btn-link.connected { border-color: #00ffff; color: #00ffff; }
+
+        .glitch-active {
+            animation: extreme-shake 0.1s infinite;
+            filter: hue-rotate(90deg) contrast(150%);
+        }
+        
+        @keyframes extreme-shake {
+            0% { transform: translate(5px, 5px) rotate(0deg); }
+            20% { transform: translate(-5px, 0px) rotate(1deg); }
+            40% { transform: translate(5px, -5px) rotate(-1deg); }
+            60% { transform: translate(-5px, 5px) rotate(0deg); }
+            80% { transform: translate(5px, -5px) rotate(1deg); }
+            100% { transform: translate(-5px, -5px) rotate(-1deg); }
+        }
+
+        #sys-msg { width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* Massive Warning Overlay */
+        #system-warning {
+            display: none;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(255, 0, 60, 0.2);
+            color: var(--danger-red);
+            font-size: 6rem;
+            text-align: center;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 900; /* Above UI, below scanlines */
+            animation: flash-warning 0.5s infinite alternate;
+            text-shadow: 0 0 20px var(--danger-red);
+        }
+        
+        @keyframes flash-warning {
+            from { background-color: rgba(255, 0, 60, 0.2); opacity: 0.8; }
+            to { background-color: rgba(255, 0, 60, 0.5); opacity: 1; }
+        }
+
+        /* Pirate Ship Overlay */
+        #pirate-ship-overlay {
+            display: none;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            justify-content: center; align-items: center;
+            z-index: 50;
+            background: rgba(2,8,2,0.8);
+            border: var(--border-style);
+        }
+
+        .ascii-ship {
+            font-family: monospace;
+            white-space: pre;
+            color: #00ffff;
+            text-shadow: 0 0 5px #00ffff;
+            animation: rock-ship 3s ease-in-out infinite alternate;
+            transform-origin: bottom center;
+            font-size: 1.5rem;
+            line-height: 1.1;
+        }
+
+        @keyframes rock-ship {
+            from { transform: rotate(-8deg) translateY(5px); }
+            to { transform: rotate(8deg) translateY(-5px); }
+        }
+
+        .ocean-waves {
+            position: absolute; bottom: 20%; width: 100%; text-align: center;
+            color: #0055ff; font-family: monospace; font-size: 2rem;
+            animation: wave-motion 2s linear infinite;
+        }
+
+        @keyframes wave-motion {
+            from { transform: translateX(-10px); }
+            to { transform: translateX(10px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="scanlines"></div>
+    <div class="flicker"></div>
+
+    <!-- The Massive Warning Overlay -->
+    <div id="system-warning">
+        <div>SYSTEM</div>
+        <div>WARNING</div>
+        <div style="font-size: 2rem; margin-top: 20px;">CRITICAL FAILURE IMMINENT</div>
+    </div>
+
+    <div class="hud-container" id="main-hud">
+        <!-- HEADER -->
+        <div class="header panel-box">
+            <div>SYS.CORE // V 9.2.5</div>
+            <button id="ble-btn" class="btn-link">LINK SENSORS</button>
+            <div>STATUS: <span id="status-text" style="animation: blink 1s infinite;">STANDBY</span></div>
+        </div>
+
+        <!-- ROW 1: ENERGY & AUDIO -->
+        <div class="row">
+            <div class="panel-box">
+                <div class="data-title">ENERGY CORE</div>
+                <div class="data-content" style="display: flex; flex-direction: column; justify-content: space-around;">
+                    <div>PWR<div class="progress-bar-container"><div class="progress-bar-fill" id="pwr-bar" style="width: 87%;"></div></div></div>
+                    <div>SHD<div class="progress-bar-container"><div class="progress-bar-fill" id="shd-bar" style="width: 42%;"></div></div></div>
+                    <div>AUX<div class="progress-bar-container"><div class="progress-bar-fill" id="aux-bar" style="width: 95%;"></div></div></div>
+                </div>
+            </div>
+            <div class="panel-box">
+                <div class="data-title">AUDIO FREQ</div>
+                <div class="data-content">
+                    <canvas id="barsCanvas" class="viz-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER PANEL (3D) -->
+        <div class="center-panel" id="center-bg">
+            <div class="target-reticle"></div>
+            <div id="three-canvas-container"></div>
+            
+            <!-- Pirate Ship Overlay (Hidden by default) -->
+            <div id="pirate-ship-overlay">
+                <div class="ascii-ship">
+       |    |    |
+      )_)  )_)  )_)
+     )___))___))___)\
+    )____)____)_____)\\
+    _____|____|____|____\\\__
+    \    GHOST SHIP         /
+     ^^^^^^^^^^^^^^^^^^^^^^^
+                </div>
+                <div class="ocean-waves">~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~</div>
+            </div>
+
+            <div id="target-lock-msg" style="position: absolute; bottom: 10px; z-index: 20; background: var(--bg-color); padding: 0 5px; font-size: 1.2rem;">AWAITING 5-SENSOR INPUT</div>
+        </div>
+
+        <!-- ROW 2: BIOMETRICS & MEMORY -->
+        <div class="row">
+            <div class="panel-box">
+                <div class="data-title">BIOMETRICS</div>
+                <div class="data-content">
+                    <canvas id="waveCanvas" class="viz-canvas"></canvas>
+                </div>
+            </div>
+            <div class="panel-box">
+                <div class="data-title">MEM DUMP</div>
+                <div class="data-content hex-dump" id="hex-container">
+                    <!-- Hex data injected by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer panel-box">
+            <div id="sys-msg">BOOT SEQUENCE COMPLETE... WAITING FOR SENSOR LINK...</div>
+            <div id="clock">00:00:00:00</div>
+        </div>
+    </div>
+
+    <script>
+        // --- GLOBAL SENSOR STATES (5 Bytes) ---
+        var prevStates = [0, 0, 0, 0, 0];
+        
+        // Visual modifiers
+        var rotSpeedBaseX = 0.005;
+        var rotSpeedBaseY = 0.01;
+        var currentSpeedMult = 1.0;
+        var waveAmpMult = 1.0;
+        var isShipActive = false;
+
+        // --- WEB AUDIO API (Procedural Synthesis) ---
+        var audioCtx;
+        var masterGain;
+
+        function initAudio() {
+            if (!audioCtx) {
+                var AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+                masterGain = audioCtx.createGain();
+                masterGain.gain.value = 0.3; // Prevent blowing out iPad speakers
+                masterGain.connect(audioCtx.destination);
+            }
+        }
+
+        // Sound 1: High Beep (Byte 0)
+        function playHighBeep() {
+            if (!audioCtx) return;
+            var osc = audioCtx.createOscillator();
+            var gainNode = audioCtx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.1);
+            gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+            
+            osc.connect(gainNode);
+            gainNode.connect(masterGain);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.2);
+        }
+
+        // Sound 2: Deep Boop (Byte 1)
+        function playDeepBoop() {
+            if (!audioCtx) return;
+            var osc = audioCtx.createOscillator();
+            var gainNode = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.3);
+            gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            
+            osc.connect(gainNode);
+            gainNode.connect(masterGain);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.35);
+        }
+
+        // Sound 3: Static Burst (Byte 2)
+        function playStatic() {
+            if (!audioCtx) return;
+            var bufferSize = audioCtx.sampleRate * 0.15; // 150ms of noise
+            var buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            var data = buffer.getChannelData(0);
+            for (var i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            var noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            
+            var gainNode = audioCtx.createGain();
+            gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+            
+            noise.connect(gainNode);
+            gainNode.connect(masterGain);
+            noise.start();
+        }
+
+        // Sound 4: Two-Tone Siren (Byte 3)
+        function playSiren() {
+            if (!audioCtx) return;
+            var osc = audioCtx.createOscillator();
+            var gainNode = audioCtx.createGain();
+            osc.type = 'square';
+            var now = audioCtx.currentTime;
+            
+            // Schedule alternating pitches
+            osc.frequency.setValueAtTime(400, now);
+            osc.frequency.setValueAtTime(600, now + 0.2);
+            osc.frequency.setValueAtTime(400, now + 0.4);
+            osc.frequency.setValueAtTime(600, now + 0.6);
+            
+            gainNode.gain.setValueAtTime(0.4, now);
+            gainNode.gain.linearRampToValueAtTime(0.01, now + 0.8);
+            
+            osc.connect(gainNode);
+            gainNode.connect(masterGain);
+            osc.start(now);
+            osc.stop(now + 0.8);
+        }
+
+        // Sound 5: Nautical Arpeggio (Byte 4)
+        function playArp() {
+            if (!audioCtx) return;
+            var osc = audioCtx.createOscillator();
+            var gainNode = audioCtx.createGain();
+            osc.type = 'square';
+            var now = audioCtx.currentTime;
+            
+            // C4, E4, G4, C5, G4, E4
+            var notes = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63]; 
+            for(var i = 0; i < notes.length; i++) {
+                osc.frequency.setValueAtTime(notes[i], now + (i * 0.12));
+            }
+            
+            gainNode.gain.setValueAtTime(0.3, now);
+            gainNode.gain.linearRampToValueAtTime(0.01, now + (notes.length * 0.12));
+            
+            osc.connect(gainNode);
+            gainNode.connect(masterGain);
+            osc.start(now);
+            osc.stop(now + (notes.length * 0.12));
+        }
+
+        // --- THREE.JS SETUP ---
+        var container = document.getElementById('three-canvas-container');
+        var scene = new THREE.Scene();
+        var camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+        
+        // Strict optimizations for old A7 chip
+        var renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false });
+        renderer.setPixelRatio(1); 
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        var geometry = new THREE.IcosahedronGeometry(12, 0); 
+        var material = new THREE.MeshBasicMaterial({ color: 0x39ff14, wireframe: true });
+        
+        var coreMesh = new THREE.Mesh(geometry, material);
+        scene.add(coreMesh);
+        camera.position.z = 35;
+
+        function animateThreeJS() {
+            requestAnimationFrame(animateThreeJS);
+            // Ignore rotation if ship is active to save GPU
+            if(!isShipActive) {
+                coreMesh.rotation.x += (rotSpeedBaseX * currentSpeedMult);
+                coreMesh.rotation.y += (rotSpeedBaseY * currentSpeedMult);
+                coreMesh.rotation.z += (0.002 * currentSpeedMult);
+                renderer.render(scene, camera);
+            }
+        }
+
+        // --- WAVEFORM CANVAS ---
+        var waveCanvas = document.getElementById('waveCanvas');
+        var waveCtx = waveCanvas.getContext('2d', { alpha: false }); 
+        var waveOffset = 0;
+
+        function resizeCanvases() {
+            var waveContainer = waveCanvas.parentElement;
+            waveCanvas.width = waveContainer.clientWidth;
+            waveCanvas.height = waveContainer.clientHeight;
+            
+            var barsContainer = barsCanvas.parentElement;
+            barsCanvas.width = barsContainer.clientWidth;
+            barsCanvas.height = barsContainer.clientHeight;
+            
+            if(container.clientWidth > 0 && container.clientHeight > 0) {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            }
+        }
+        window.addEventListener('resize', resizeCanvases);
+
+        function drawWaveform() {
+            waveCtx.fillStyle = '#0a330a'; 
+            waveCtx.fillRect(0, 0, waveCanvas.width, waveCanvas.height);
+            
+            waveCtx.beginPath();
+            waveCtx.strokeStyle = (waveAmpMult > 1.0) ? '#ff0000' : '#39ff14'; 
+            waveCtx.lineWidth = (waveAmpMult > 1.0) ? 4 : 2;
+
+            var centerY = waveCanvas.height / 2;
+            var baseAmplitude = waveCanvas.height * 0.25;
+            var amplitude = baseAmplitude * waveAmpMult;
+
+            for (var x = 0; x < waveCanvas.width; x += 3) {
+                var y = centerY + Math.sin(x * 0.05 + waveOffset) * amplitude;
+                if (Math.random() > 0.98) y += (Math.random() - 0.5) * (40 * waveAmpMult);
+                if (x === 0) waveCtx.moveTo(x, y);
+                else waveCtx.lineTo(x, y);
+            }
+            waveCtx.stroke();
+            waveOffset += ((waveAmpMult > 1.0) ? 0.4 : 0.15); 
+            requestAnimationFrame(drawWaveform);
+        }
+
+        // --- BARS CANVAS ---
+        var barsCanvas = document.getElementById('barsCanvas');
+        var barsCtx = barsCanvas.getContext('2d', { alpha: false });
+        var barCounts = 16;
+        var barValues = new Array(barCounts);
+        for(var i=0; i<barCounts; i++) barValues[i] = 0;
+
+        function drawBars() {
+            barsCtx.fillStyle = '#0a330a';
+            barsCtx.fillRect(0, 0, barsCanvas.width, barsCanvas.height);
+            var barWidth = (barsCanvas.width / barCounts) - 2;
+            barsCtx.fillStyle = '#39ff14';
+            
+            for (var i = 0; i < barCounts; i++) {
+                if (Math.random() > 0.8) barValues[i] = Math.random() * barsCanvas.height;
+                else barValues[i] = Math.max(0, barValues[i] - 3); 
+                
+                var height = barValues[i];
+                barsCtx.fillRect(i * (barWidth + 2), barsCanvas.height - height, barWidth, height);
+            }
+            setTimeout(function() { requestAnimationFrame(drawBars) }, 60);
+        }
+
+        // --- HEX & CLOCK ---
+        var hexContainer = document.getElementById('hex-container');
+        function updateHex() {
+            var lines = [];
+            for(var i=0; i<8; i++) {
+                var line = "0x" + Math.floor(Math.random()*16777215).toString(16).toUpperCase();
+                while(line.length < 6) line = "0" + line; 
+                line += " ";
+                for(var j=0; j<4; j++) {
+                    var chunk = Math.floor(Math.random()*255).toString(16).toUpperCase();
+                    if(chunk.length < 2) chunk = "0" + chunk;
+                    line += chunk + " ";
+                }
+                lines.push(line);
+            }
+            hexContainer.innerHTML = lines.join('<br>');
+        }
+        setInterval(updateHex, 350);
+
+        function updateClock() {
+            var now = new Date();
+            var h = now.getHours().toString(); if(h.length<2) h="0"+h;
+            var m = now.getMinutes().toString(); if(m.length<2) m="0"+m;
+            var s = now.getSeconds().toString(); if(s.length<2) s="0"+s;
+            var ms = Math.floor(now.getMilliseconds()/10).toString(); if(ms.length<2) ms="0"+ms;
+            
+            document.getElementById('clock').innerText = h + ":" + m + ":" + s + ":" + ms;
+            requestAnimationFrame(updateClock);
+        }
+
+        // --- BLUETOOTH / ESP32 INTEGRATION ---
+        var bleButton = document.getElementById('ble-btn');
+        var hudContainer = document.getElementById('main-hud');
+        
+        var BLE_SERVICE_UUID = '19b10000-e8f2-537e-4f6c-d104768a1214';
+        var BLE_CHAR_UUID    = '19b10001-e8f2-537e-4f6c-d104768a1214';
+
+        bleButton.addEventListener('click', function() {
+            // Initialize audio on first user interaction!
+            initAudio();
+
+            if (!navigator.bluetooth) {
+                document.getElementById('sys-msg').innerText = "ERR: WEB BLUETOOTH API UNAVAILABLE";
+                bleButton.innerText = "NO BLE";
+                return;
+            }
+
+            bleButton.innerText = "SCANNING...";
+            document.getElementById('sys-msg').innerText = "INITIATING HANDSHAKE WITH SENSOR HUB...";
+
+            navigator.bluetooth.requestDevice({
+                filters: [{ services: [BLE_SERVICE_UUID] }]
+            })
+            .then(function(device) {
+                return device.gatt.connect();
+            })
+            .then(function(server) {
+                return server.getPrimaryService(BLE_SERVICE_UUID);
+            })
+            .then(function(service) {
+                return service.getCharacteristic(BLE_CHAR_UUID);
+            })
+            .then(function(characteristic) {
+                return characteristic.startNotifications().then(function() {
+                    characteristic.addEventListener('characteristicvaluechanged', handleSensorData);
+                    
+                    bleButton.innerText = "LINKED";
+                    bleButton.classList.add('connected');
+                    document.getElementById('status-text').innerText = "ONLINE";
+                    document.getElementById('sys-msg').innerText = "LINK ESTABLISHED. SENSORS ACTIVE.";
+                    document.getElementById('target-lock-msg').innerText = "5-POINT LINK NOMINAL";
+                });
+            })
+            .catch(function(error) {
+                console.error(error);
+                bleButton.innerText = "LINK FAILED";
+                document.getElementById('sys-msg').innerText = "CONNECTION ERROR: " + error;
+            });
+        });
+
+        // Handle incoming BLE data (5-byte array)
+        function handleSensorData(event) {
+            var dataView = event.target.value;
+            if (dataView.byteLength < 5) return; 
+            
+            var b0 = dataView.getUint8(0); 
+            var b1 = dataView.getUint8(1); 
+            var b2 = dataView.getUint8(2); 
+            var b3 = dataView.getUint8(3); 
+            var b4 = dataView.getUint8(4); 
+
+            // Logic to play sound only on initial press (transition from 0 to 1)
+            var p0 = (b0 === 1 && prevStates[0] === 0);
+            var p1 = (b1 === 1 && prevStates[1] === 0);
+            var p2 = (b2 === 1 && prevStates[2] === 0);
+            var p3 = (b3 === 1 && prevStates[3] === 0);
+            var p4 = (b4 === 1 && prevStates[4] === 0);
+
+            // Update state history
+            prevStates = [b0, b1, b2, b3, b4];
+
+            // --- BYTE 0: Core Color & Speed ---
+            if (b0 === 1) {
+                if(p0) playHighBeep();
+                material.color.setHex(0xff0000);
+                currentSpeedMult = 15.0; 
+                document.getElementById('center-bg').style.background = 'radial-gradient(circle, rgba(255,0,0,0.2) 0%, rgba(2,8,2,1) 70%)';
+            } else {
+                material.color.setHex(0x39ff14);
+                currentSpeedMult = 1.0;
+                document.getElementById('center-bg').style.background = 'radial-gradient(circle, rgba(57,255,20,0.1) 0%, rgba(2,8,2,1) 70%)';
+            }
+
+            // --- BYTE 1: Waveform Amplitude ---
+            if (b1 === 1) {
+                if(p1) playDeepBoop();
+                waveAmpMult = 3.5; 
+            } else {
+                waveAmpMult = 1.0;
+            }
+
+            // --- BYTE 2: Glitch Effect ---
+            if (b2 === 1) {
+                if(p2) playStatic();
+                hudContainer.classList.add('glitch-active');
+            } else {
+                hudContainer.classList.remove('glitch-active');
+            }
+
+            // --- BYTE 3: Massive Warning Overlay ---
+            var warningOverlay = document.getElementById('system-warning');
+            if (b3 === 1) {
+                if(p3) playSiren();
+                warningOverlay.style.display = 'flex';
+            } else {
+                warningOverlay.style.display = 'none';
+            }
+
+            // --- BYTE 4: Pirate Ship Overlay ---
+            var shipOverlay = document.getElementById('pirate-ship-overlay');
+            var threeCanvas = document.getElementById('three-canvas-container');
+            if (b4 === 1) {
+                if(p4) playArp();
+                isShipActive = true;
+                shipOverlay.style.display = 'flex';
+                threeCanvas.style.display = 'none'; // hide 3d to show ship better
+            } else {
+                isShipActive = false;
+                shipOverlay.style.display = 'none';
+                threeCanvas.style.display = 'block';
+            }
+            
+            // Randomize progress bars on any touch input
+            if (b0 === 1 || b1 === 1 || b2 === 1 || b3 === 1 || b4 === 1) {
+                document.getElementById('pwr-bar').style.width = (70 + Math.random() * 30) + '%';
+                document.getElementById('shd-bar').style.width = (20 + Math.random() * 80) + '%';
+            }
+        }
+
+        window.onload = function() {
+            // Need slight delay to ensure divs have size before sizing canvas
+            setTimeout(function() {
+                resizeCanvases();
+                animateThreeJS();
+                drawWaveform();
+                drawBars();
+                updateHex();
+                updateClock();
+            }, 100);
+        };
+
+        var style = document.createElement('style');
+        style.innerHTML = "@keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }";
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
