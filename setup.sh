@@ -91,6 +91,15 @@ fi
 
 # 2. Install Core Dependencies, System Utilities, Monitoring, & Encryption
 log "Installing core utilities, compilation toolchains, monitoring tools, and security packages..."
+# Use Dracut's systemd initramfs so the LUKS2 TPM token is available during boot.
+sudo install -d -m 0755 /etc/dracut.conf.d
+printf '%s\n' \
+    'hostonly="yes"' \
+    'hostonly_cmdline="yes"' \
+    'install_items+=" /etc/crypttab "' \
+    'add_dracutmodules+=" systemd-cryptsetup crypt lvm tpm2-tss "' \
+    'omit_dracutmodules+=" console-setup "' \
+    | sudo tee /etc/dracut.conf.d/20-luks-tpm.conf > /dev/null
 sudo DEBIAN_FRONTEND=noninteractive apt install -y \
     xfce4 \
     xfce4-goodies \
@@ -106,8 +115,9 @@ sudo DEBIAN_FRONTEND=noninteractive apt install -y \
     gh \
     ntfs-3g \
     openssl \
-    initramfs-tools \
-    cryptsetup-initramfs \
+    dracut \
+    cryptsetup \
+    systemd-cryptsetup \
     build-essential \
     gcc \
     g++ \
@@ -500,7 +510,7 @@ log "Checking TPM 2.0 availability and existing enrollment..."
 
 configure_tpm2_boot_unlock() {
     local luks_device="$1"
-    local luks_uuid crypttab_tmp awk_status
+    local luks_uuid crypttab_tmp awk_status crypttab_changed initrd_path
 
     if ! luks_uuid=$(sudo cryptsetup luksUUID "$luks_device" 2>/dev/null); then
         warn "Could not read the LUKS UUID for ${luks_device}; TPM boot configuration was not changed."
@@ -518,56 +528,81 @@ configure_tpm2_boot_unlock() {
     fi
 
     if sudo awk -v uuid="$luks_uuid" -v device="$luks_device" '
-        BEGIN { found = 0 }
+        BEGIN { found = 0; changed = 0 }
         /^[[:space:]]*#/ || NF == 0 { print; next }
         $2 == "UUID=" uuid || $2 == "/dev/disk/by-uuid/" uuid || $2 == device {
             found = 1
-            options = NF >= 4 ? $4 : ""
-            if (options ~ /(^|,)tpm2-device=/) { print; next }
-            key = NF >= 3 ? $3 : "none"
-            options = options == "" ? "tpm2-device=auto" : options ",tpm2-device=auto"
-            print $1, $2, key, options
+            old_options = NF >= 4 ? $4 : ""
+            option_count = split(old_options, options, ",")
+            new_options = ""
+            has_initrd_attach = 0
+            for (i = 1; i <= option_count; i++) {
+                if (options[i] ~ /^tpm2-device=/) {
+                    continue
+                }
+                if (options[i] == "x-initrd.attach") {
+                    has_initrd_attach = 1
+                }
+                if (options[i] != "") {
+                    new_options = new_options (new_options == "" ? "" : ",") options[i]
+                }
+            }
+            if (!has_initrd_attach) {
+                new_options = new_options (new_options == "" ? "" : ",") "x-initrd.attach"
+            }
+            new_options = new_options (new_options == "" ? "" : ",") "tpm2-device=auto"
+            if (NF < 3 || $3 == "") $3 = "none"
+            $4 = new_options
+            if (new_options != old_options) changed = 1
+            print
             next
         }
         { print }
         END { if (!found) exit 3 }
     ' /etc/crypttab > "$crypttab_tmp"; then
-        if ! sudo install -o root -g root -m 0644 "$crypttab_tmp" /etc/crypttab; then
-            rm -f "$crypttab_tmp"
-            warn "Could not update /etc/crypttab; TPM boot configuration was not changed."
-            return 1
-        fi
+        crypttab_changed=false
     else
         awk_status=$?
-        rm -f "$crypttab_tmp"
         if [ "$awk_status" -eq 3 ]; then
-            warn "No /etc/crypttab entry matched ${luks_device} (UUID=${luks_uuid}); add tpm2-device=auto to the correct entry manually."
+            rm -f "$crypttab_tmp"
+            warn "No /etc/crypttab entry matched ${luks_device} (UUID=${luks_uuid}); TPM boot configuration was not changed."
+            return 1
+        elif [ "$awk_status" -eq 4 ]; then
+            crypttab_changed=false
         else
+            rm -f "$crypttab_tmp"
             warn "Could not process /etc/crypttab; TPM boot configuration was not changed."
-        fi
-        return 1
-    fi
-
-    rm -f "$crypttab_tmp"
-    log "Configured TPM 2.0 unlocking for ${luks_device} in /etc/crypttab."
-
-    if ! sudo sh -c 'command -v update-initramfs >/dev/null 2>&1'; then
-        log "Installing initramfs tooling required for TPM boot unlocking..."
-        if ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y initramfs-tools cryptsetup-initramfs; then
-            warn "Could not install initramfs tooling; TPM boot configuration may not take effect until the initramfs is rebuilt."
             return 1
         fi
     fi
-    if ! sudo sh -c 'command -v update-initramfs >/dev/null 2>&1'; then
-        warn "update-initramfs is still unavailable after installing initramfs-tools."
-        return 1
+
+    if grep -F "tpm2-device=auto" "$crypttab_tmp" >/dev/null && ! cmp -s "$crypttab_tmp" /etc/crypttab; then
+        crypttab_changed=true
+        if ! sudo install -o root -g root -m 0644 "$crypttab_tmp" /etc/crypttab; then
+            rm -f "$crypttab_tmp"
+            warn "Could not configure TPM unlocking in /etc/crypttab."
+            return 1
+        fi
+        log "Configured TPM2 unlocking in /etc/crypttab for ${luks_device}."
     fi
-    if ! sudo update-initramfs -u -k all; then
-        warn "Failed to rebuild the initramfs; TPM boot configuration may not take effect until it is rebuilt successfully."
+    rm -f "$crypttab_tmp"
+
+    if ! sudo dracut --regenerate-all --force; then
+        warn "Failed to rebuild the Dracut initramfs with TPM2 support."
         return 1
     fi
 
-    log "Rebuilt initramfs with TPM 2.0 unlock configuration."
+    initrd_path="/boot/initrd.img-$(uname -r)"
+    if ! sudo lsinitrd "$initrd_path" | grep -F 'etc/crypttab' >/dev/null; then
+        warn "The current Dracut initramfs does not contain /etc/crypttab; TPM boot unlocking is not configured."
+        return 1
+    fi
+    if ! sudo lsinitrd "$initrd_path" | grep -F 'libcryptsetup-token-systemd-tpm2.so' >/dev/null; then
+        warn "The current Dracut initramfs does not contain the systemd TPM2 token plugin."
+        return 1
+    fi
+
+    log "Dracut initramfs contains the TPM2 crypttab entry and token plugin. The LUKS passphrase remains available for recovery."
 }
 
 # Ensure TPM kernel modules are loaded if available
@@ -611,11 +646,11 @@ if [ -n "$TPM_DEV_NODE" ]; then
 
     # Check if detected device already has TPM 2.0 enrolled
     if [ -n "$LUKS_DEV" ] && sudo systemd-cryptenroll "$LUKS_DEV" 2>/dev/null | grep -qw "tpm2"; then
-        log "TPM 2.0 is already enrolled on ${LUKS_DEV} for automatic unlock on boot."
+        log "A TPM 2.0 key is already enrolled on ${LUKS_DEV}."
         TPM_ENROLLED_DEV="$LUKS_DEV"
     else
         echo ""
-        if prompt_confirm "Would you like to enroll your TPM 2.0 chip for automatic LUKS decryption on boot? (y/N)"; then
+        if prompt_confirm "Enroll a TPM 2.0 key for automatic LUKS boot unlock? Keep the passphrase as recovery. (y/N)"; then
             echo ""
             echo "Candidate encrypted partition(s) found (crypto_LUKS):"
             lsblk -o NAME,FSTYPE,SIZE,TYPE,MOUNTPOINTS | grep -E "NAME|crypto_LUKS" || lsblk -f
@@ -635,21 +670,21 @@ if [ -n "$TPM_DEV_NODE" ]; then
 
             if [ -b "$TARGET_PART" ]; then
                 if sudo systemd-cryptenroll "$TARGET_PART" 2>/dev/null | grep -qw "tpm2"; then
-                    log "TPM 2.0 is already enrolled on ${TARGET_PART}!"
+                    log "A TPM 2.0 key is already enrolled on ${TARGET_PART}."
                     TPM_ENROLLED_DEV="$TARGET_PART"
                 else
                     log "Enrolling TPM 2.0 (PCRs 7) to ${TARGET_PART}..."
                     echo "Note: You will be prompted for your LUKS recovery passphrase to authorize this enrollment."
                     if [ -e /dev/tty ] && [ -r /dev/tty ]; then
                         if sudo systemd-cryptenroll --tpm2-device="$TPM_DEV_NODE" --tpm2-pcrs=7 "$TARGET_PART" < /dev/tty; then
-                            log "TPM 2.0 successfully enrolled! Your system will now auto-unlock on boot."
+                            log "TPM 2.0 key successfully enrolled on ${TARGET_PART}."
                             TPM_ENROLLED_DEV="$TARGET_PART"
                         else
                             warn "TPM 2.0 enrollment failed or was cancelled. Skipping TPM enrollment."
                         fi
                     else
                         if sudo systemd-cryptenroll --tpm2-device="$TPM_DEV_NODE" --tpm2-pcrs=7 "$TARGET_PART"; then
-                            log "TPM 2.0 successfully enrolled! Your system will now auto-unlock on boot."
+                            log "TPM 2.0 key successfully enrolled on ${TARGET_PART}."
                             TPM_ENROLLED_DEV="$TARGET_PART"
                         else
                             warn "TPM 2.0 enrollment failed. Skipping TPM enrollment."
