@@ -1,22 +1,14 @@
 #!/usr/bin/env bash
 #
 # =========================================================================
-# MANUAL SUDO BOOTSTRAP (If your user is not in the sudoers file yet):
-#   su -
-#   /usr/sbin/usermod -aG sudo josh   # (Replace 'josh' with your username)
-#   exit
-#   (Then log out and log back in, or reboot)
-#
 # Usage:
-#   curl -fsSL https://www.optimumunknown.com/setup.sh | bash
-#   # or:
 #   wget -qO- https://www.optimumunknown.com/setup.sh | bash
 #
 # =========================================================================
 #
 # Debian Headless Dev Setup Script (Complete Toolchain & Non-Interactive Setup)
 # Automatically configures XFCE, XRDP, VSCodium, NVM, Docker, Tailscale,
-# Cloudflare & GCloud CLIs, Encryption tools, OpenCV, System Monitoring, Remmina, and SSH.
+# Cloudflare & GCloud CLIs, Encryption tools, OpenCV, System Monitoring, and Remmina.
 
 set -euo pipefail
 
@@ -66,7 +58,7 @@ prompt_input() {
 
 # Ensure script is run as normal user (not root directly)
 if [ "$(id -u)" -eq 0 ]; then
-    err "Please run this script as your normal user, NOT as root. It will bootstrap sudo access if needed."
+    err "Please run this script as your normal user, not as root."
 fi
 
 TARGET_USER="$USER"
@@ -74,27 +66,9 @@ USER_HOME="$HOME"
 
 echo "=========================================================="
 echo "  Debian Headless Development Machine Setup Script        "
-echo "  (SSH Password Auth Enabled & Self-Bootstrapping Sudo)   "
+echo "  (Sudo access configured by Debian installer)           "
 echo "=========================================================="
 echo ""
-
-# --- BOOTSTRAP STEP: Ensure user is in the sudo group ---
-if ! groups "$TARGET_USER" | grep -qw "sudo"; then
-    warn "User '${TARGET_USER}' is not currently in the 'sudo' group."
-    echo "To install packages, root privileges are required to add you to the sudoers list."
-    echo "Please enter the root password below when prompted:"
-    
-    su - root -c "/usr/sbin/usermod -aG sudo $TARGET_USER"
-    
-    echo ""
-    log "Successfully added '${TARGET_USER}' to the sudo group!"
-    echo "=========================================================="
-    warn "ACTION REQUIRED: You must log out and log back in (or reboot)"
-    warn "for the new sudo group permissions to take effect on your user session."
-    warn "Once logged back in, re-run this script to continue setup!"
-    echo "=========================================================="
-    exit 0
-fi
 
 # 1. Update and Upgrade System
 log "Updating APT package lists and upgrading existing packages..."
@@ -115,8 +89,8 @@ if [ ! -f /etc/apt/sources.list.d/home:unit193:veracrypt.list ]; then
     sudo DEBIAN_FRONTEND=noninteractive apt update
 fi
 
-# 2. Install Core Dependencies, System Utilities, Monitoring, SSH Server, & Encryption
-log "Installing core utilities, compilation toolchains, SSH server, monitoring tools, and security packages..."
+# 2. Install Core Dependencies, System Utilities, Monitoring, & Encryption
+log "Installing core utilities, compilation toolchains, monitoring tools, and security packages..."
 sudo DEBIAN_FRONTEND=noninteractive apt install -y \
     xfce4 \
     xfce4-goodies \
@@ -129,8 +103,9 @@ sudo DEBIAN_FRONTEND=noninteractive apt install -y \
     ca-certificates \
     lsb-release \
     git \
+    gh \
+    ntfs-3g \
     openssl \
-    openssh-server \
     initramfs-tools \
     cryptsetup-initramfs \
     build-essential \
@@ -160,6 +135,7 @@ sudo DEBIAN_FRONTEND=noninteractive apt install -y \
     fscrypt \
     libpam-fscrypt \
     tpm2-tools \
+    qdirstat \
     remmina
 
 # Add xrdp user to ssl-cert group to allow access to TLS certs
@@ -279,21 +255,7 @@ echo "Local GUI enabled. Default boot target is now graphical.target."
 EOF
 sudo chmod +x /usr/local/bin/enable-gui
 
-# 5. Configure & Start SSH Server Immediately
-log "Ensuring SSH service is active, enabled, and allowed..."
-sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-# Password authentication left enabled as requested for convenient initial remote access:
-# sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-sudo sed -i 's/^#\?PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
-sudo systemctl enable --now ssh || sudo systemctl enable --now sshd
-sudo systemctl restart ssh || sudo systemctl restart sshd
-
-# Open firewall port 22 if ufw is installed and active
-if command -v ufw >/dev/null 2>&1; then
-    sudo ufw allow ssh || true
-fi
-
-# 6. Silence Polkit Color Manager Popups
+# 5. Silence Polkit Color Manager Popups
 log "Adding Polkit rule to suppress colord prompts over RDP..."
 sudo mkdir -p /etc/polkit-1/rules.d/
 cat << 'EOF' | sudo tee /etc/polkit-1/rules.d/02-allow-colord.rules > /dev/null
@@ -307,7 +269,7 @@ polkit.addRule(function(action, subject) {
 });
 EOF
 
-# 7. Install VSCodium (Open Source VS Code Alternative)
+# 6. Install VSCodium (Open Source VS Code Alternative)
 log "Installing VSCodium..."
 if [ ! -s /usr/share/keyrings/vscodium-archive-keyring.gpg ]; then
     wget -qO - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg | gpg --dearmor | sudo tee /usr/share/keyrings/vscodium-archive-keyring.gpg > /dev/null
@@ -322,7 +284,7 @@ else
     log "VSCodium is already installed."
 fi
 
-# 8. Install NVM (Node Version Manager) & Node.js LTS
+# 7. Install NVM (Node Version Manager) & Node.js LTS
 log "Installing NVM (Node Version Manager) & Node.js LTS..."
 export NVM_DIR="${USER_HOME}/.nvm"
 if [ ! -d "$NVM_DIR" ] || [ ! -s "$NVM_DIR/nvm.sh" ]; then
@@ -366,7 +328,7 @@ if [ -n "$NODE_EXEC" ] && [ -x "$NODE_EXEC" ]; then
 fi
 set -euo pipefail
 
-# 9. Install Python UV (Fast Package Manager)
+# 8. Install Python UV (Fast Package Manager)
 log "Installing Astral uv (Python package installer)..."
 export PATH="${USER_HOME}/.local/bin:${USER_HOME}/.cargo/bin:$PATH"
 if ! command -v uv >/dev/null 2>&1; then
@@ -375,7 +337,7 @@ else
     log "Astral uv is already installed ($(uv --version 2>/dev/null || echo 'installed'))."
 fi
 
-# 10. Install Docker & Docker Compose Plugin
+# 9. Install Docker & Docker Compose Plugin
 log "Installing Docker & Docker Compose..."
 if [ ! -s /etc/apt/keyrings/docker.gpg ]; then
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/docker.gpg > /dev/null
@@ -395,7 +357,7 @@ else
 fi
 sudo usermod -aG docker "${TARGET_USER}" 2>/dev/null || true
 
-# 11. Install Tailscale VPN
+# 10. Install Tailscale VPN
 log "Installing Tailscale..."
 if ! command -v tailscale >/dev/null 2>&1; then
     curl -fsSL https://tailscale.com/install.sh | sh
@@ -403,7 +365,7 @@ else
     log "Tailscale is already installed ($(tailscale version 2>/dev/null | head -n1 || echo 'installed'))."
 fi
 
-# 12. Install Google Cloud CLI
+# 11. Install Google Cloud CLI
 log "Installing Google Cloud CLI..."
 if [ ! -s /usr/share/keyrings/cloud.google.gpg ]; then
     curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor | sudo tee /usr/share/keyrings/cloud.google.gpg > /dev/null
@@ -418,7 +380,7 @@ else
     log "Google Cloud CLI is already installed."
 fi
 
-# 13. Install Cloudflare CLI ('cf') & Cloudflared
+# 12. Install Cloudflare CLI ('cf') & Cloudflared
 log "Installing Cloudflare CLI ('cf') via npm and Cloudflared..."
 if ! command -v node >/dev/null 2>&1; then
     set +eu
@@ -449,7 +411,7 @@ else
     log "Cloudflared daemon is already installed."
 fi
 
-# 14. Serial Port & Container Permissions (dialout & docker groups)
+# 13. Serial Port & Container Permissions (dialout & docker groups)
 log "Ensuring ${TARGET_USER} is in dialout & docker groups..."
 for grp in dialout docker; do
     if getent group "$grp" >/dev/null 2>&1; then
@@ -457,22 +419,7 @@ for grp in dialout docker; do
     fi
 done
 
-# 15. Configure SSH Directory & Agent Auto-Start
-log "Setting up SSH directory and auto-agent..."
-mkdir -p "${USER_HOME}/.ssh"
-chmod 700 "${USER_HOME}/.ssh"
-
-if ! grep -q "ssh-agent" "${USER_HOME}/.bashrc" 2>/dev/null; then
-    cat << 'EOF' >> "${USER_HOME}/.bashrc"
-
-# Auto-start SSH Agent
-if [ -z "$SSH_AUTH_SOCK" ]; then
-   eval "$(ssh-agent -s)" > /dev/null
-fi
-EOF
-fi
-
-# 16. Configure Terminal Cheat Sheet ('h' command) & Aliases
+# 14. Configure Terminal Cheat Sheet ('h' command) & Aliases
 log "Setting up system cheat sheet shortcut ('h') and aliases..."
 if ! grep -q "alias bat='batcat'" "${USER_HOME}/.bashrc" 2>/dev/null; then
     echo "alias bat='batcat'" >> "${USER_HOME}/.bashrc"
@@ -493,6 +440,7 @@ cat << 'CHEAT'
   codium              - Open-source, telemetry-free VS Code editor
   nvm                 - Node Version Manager (switch Node versions dynamically)
   node / npm          - Node.js JavaScript runtime & package manager
+  gh                  - GitHub command-line client
   uv                  - Ultra-fast Python package installer & resolver (pip replacement)
   python3 / pip3      - Python 3 interpreter and standard package manager
   gcc / g++ / cmake   - C/C++ compilation, build systems, and GDB debugger
@@ -516,12 +464,16 @@ cat << 'CHEAT'
 [Terminal Utilities & Productivity]
   curl / wget         - Command-line HTTP and data transfer utilities
   btop                - Modern, interactive terminal resource & process monitor
-  tmux                - Terminal multiplexer (keep persistent sessions over SSH/RDP)
+  tmux                - Terminal multiplexer for persistent sessions
   fzf                 - Command-line interactive fuzzy finder (Ctrl+R / Ctrl+T)
   ripgrep (rg)        - Ultra-fast recursive line-matching search tool
   bat (batcat)        - Cat clone with syntax highlighting and Git integration
-  ncdu                - NCurses disk usage analyzer (interactive disk space scanner)
   jq                  - Command-line JSON processor and filter
+
+[Filesystems & Disk Usage]
+    ntfs-3g             - Read and write NTFS filesystems
+    qdirstat            - Graphical disk usage visualizer
+    ncdu                - Interactive terminal disk usage analyzer
 
 [Media & Video Tools]
   ffmpeg              - Command-line audio/video converter and video processor
@@ -539,12 +491,12 @@ sudo chmod +x /usr/local/bin/h
 
 echo ""
 echo "=========================================================="
-echo "  Automated Post-Install Steps (TPM & SSH)                "
+echo "  Automated Post-Install Steps (TPM)                       "
 echo "=========================================================="
 echo ""
 
-# --- STEP 1 & 2: TPM 2.0 Verification & LUKS Enrollment ---
-log "Step 1/2: Checking TPM 2.0 availability and existing enrollment..."
+# --- TPM 2.0 Verification & LUKS Enrollment ---
+log "Checking TPM 2.0 availability and existing enrollment..."
 
 configure_tpm2_boot_unlock() {
     local luks_device="$1"
@@ -723,28 +675,9 @@ fi
 
 echo ""
 
-# --- STEP 2: SSH Key Generation ---
-log "Step 2/2: Checking SSH key configuration..."
-if [ -f "${USER_HOME}/.ssh/id_ed25519" ] || [ -f "${USER_HOME}/.ssh/id_rsa" ] || [ -f "${USER_HOME}/.ssh/id_ecdsa" ]; then
-    log "Existing SSH key found in ${USER_HOME}/.ssh/."
-else
-    if prompt_confirm "No SSH key found. Would you like to generate an Ed25519 key now? (y/N)"; then
-        prompt_input "Enter your email address for the SSH key comment [user@debian]:" SSH_EMAIL "user@debian"
-        if [ -e /dev/tty ] && [ -r /dev/tty ]; then
-            ssh-keygen -t ed25519 -C "$SSH_EMAIL" -f "${USER_HOME}/.ssh/id_ed25519" < /dev/tty
-        else
-            ssh-keygen -t ed25519 -C "$SSH_EMAIL" -f "${USER_HOME}/.ssh/id_ed25519" -N ""
-        fi
-        log "SSH key generated successfully at ${USER_HOME}/.ssh/id_ed25519!"
-    else
-        warn "Skipping SSH key generation."
-    fi
-fi
-
 echo ""
 echo "=========================================================="
 echo "  Setup Complete Successfully!                            "
 echo "=========================================================="
 warn "Please log out and back in (or reboot) for user group permissions (Docker, dialout) to take effect."
-echo "You can now SSH into this machine from your host using: ssh username@<vm-ip>"
 echo "=========================================================="
