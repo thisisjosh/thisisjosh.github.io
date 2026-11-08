@@ -89,6 +89,14 @@ if [ ! -f /etc/apt/sources.list.d/home:unit193:veracrypt.list ]; then
     sudo DEBIAN_FRONTEND=noninteractive apt update
 fi
 
+# Add Microsoft's signed repository for the official Visual Studio Code package.
+if [ ! -s /usr/share/keyrings/microsoft-archive-keyring.gpg ]; then
+    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /usr/share/keyrings/microsoft-archive-keyring.gpg > /dev/null
+fi
+printf 'deb [arch=%s signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/repos/code stable main\n' \
+    "$(dpkg --print-architecture)" | sudo tee /etc/apt/sources.list.d/vscode.list > /dev/null
+sudo DEBIAN_FRONTEND=noninteractive apt update
+
 # 2. Install Core Dependencies, System Utilities, Monitoring, & Encryption
 log "Installing core utilities, compilation toolchains, monitoring tools, and security packages..."
 # Use Dracut's systemd initramfs so the LUKS2 TPM token is available during boot.
@@ -113,7 +121,11 @@ sudo DEBIAN_FRONTEND=noninteractive apt install -y \
     lsb-release \
     git \
     gh \
+    code \
     ntfs-3g \
+    chromium \
+    virt-manager \
+    pipx \
     openssl \
     dracut \
     cryptsetup \
@@ -147,6 +159,45 @@ sudo DEBIAN_FRONTEND=noninteractive apt install -y \
     tpm2-tools \
     qdirstat \
     remmina
+
+# Install mitmproxy in an isolated environment, outside Debian's managed Python.
+log "Installing mitmproxy with pipx..."
+export PATH="${USER_HOME}/.local/bin:$PATH"
+if ! command -v mitmproxy >/dev/null 2>&1; then
+    pipx install mitmproxy
+else
+    log "mitmproxy is already installed."
+fi
+
+# Install Google's standalone Antigravity IDE from its official Linux archive.
+log "Installing Google Antigravity IDE..."
+ANTIGRAVITY_IDE_URL='https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/2.6.0-5526304964083712/linux-x64/Antigravity%20IDE.tar.gz'
+ANTIGRAVITY_IDE_ARCHIVE="$(mktemp)"
+if ! curl -fsSL "$ANTIGRAVITY_IDE_URL" -o "$ANTIGRAVITY_IDE_ARCHIVE"; then
+    rm -f "$ANTIGRAVITY_IDE_ARCHIVE"
+    err "Failed to download the official Antigravity IDE archive."
+fi
+sudo tar -xzf "$ANTIGRAVITY_IDE_ARCHIVE" -C /opt
+rm -f "$ANTIGRAVITY_IDE_ARCHIVE"
+sudo ln -sfn "/opt/Antigravity IDE/antigravity-ide" /usr/local/bin/antigravity-ide
+cat << 'EOF' | sudo tee /usr/share/applications/antigravity-ide.desktop > /dev/null
+[Desktop Entry]
+Name=Google Antigravity IDE
+Comment=Google's agentic development environment
+Exec=/usr/local/bin/antigravity-ide %U
+Terminal=false
+Type=Application
+Categories=Development;IDE;
+EOF
+
+# Install the official Antigravity CLI; Google's installer places `agy` in ~/.local/bin.
+log "Installing Google Antigravity CLI..."
+export PATH="${USER_HOME}/.local/bin:$PATH"
+if ! command -v agy >/dev/null 2>&1; then
+    curl -fsSL https://antigravity.google/cli/install.sh | bash
+else
+    log "Google Antigravity CLI is already installed."
+fi
 
 # Add xrdp user to ssl-cert group to allow access to TLS certs
 if getent group ssl-cert >/dev/null 2>&1; then
@@ -451,6 +502,9 @@ cat << 'CHEAT'
   nvm                 - Node Version Manager (switch Node versions dynamically)
   node / npm          - Node.js JavaScript runtime & package manager
   gh                  - GitHub command-line client
+    code                - Microsoft Visual Studio Code
+    antigravity-ide     - Google Antigravity standalone IDE
+    agy                 - Google Antigravity command-line agent
   uv                  - Ultra-fast Python package installer & resolver (pip replacement)
   python3 / pip3      - Python 3 interpreter and standard package manager
   gcc / g++ / cmake   - C/C++ compilation, build systems, and GDB debugger
@@ -463,6 +517,9 @@ cat << 'CHEAT'
   cf                  - Cloudflare API command-line tool
   cloudflared         - Cloudflare Tunnel daemon for exposing local ports securely
 
+[Browsers]
+    chromium            - Chromium web browser
+
 [Encryption & Security]
   fscrypt             - Linux kernel ext4 folder encryption tool
   veracrypt           - Cross-platform file/partition encryption container manager
@@ -470,6 +527,10 @@ cat << 'CHEAT'
   keepassxc           - Offline encrypted password manager (.kdbx)
   rclone              - Sync & encrypt files to cloud storage providers (S3, Drive, etc.)
   tpm2-tools          - Hardware TPM 2.0 security module configuration utilities
+
+[Virtualization & Network Tools]
+    virt-manager        - Graphical manager for KVM virtual machines
+    mitmproxy           - Isolated HTTP(S) proxy for authorized traffic debugging
 
 [Terminal Utilities & Productivity]
   curl / wget         - Command-line HTTP and data transfer utilities
