@@ -111,6 +111,7 @@ printf '%s\n' \
 sudo DEBIAN_FRONTEND=noninteractive apt install -y \
     xfce4 \
     xfce4-goodies \
+    xfce4-indicator-plugin \
     xorgxrdp \
     xrdp \
     dbus-x11 \
@@ -159,6 +160,32 @@ sudo DEBIAN_FRONTEND=noninteractive apt install -y \
     tpm2-tools \
     qdirstat \
     remmina
+
+# Install Dropbox's official 64-bit Linux daemon and register it as a user service.
+log "Installing Dropbox daemon..."
+mkdir -p "${USER_HOME}/.local/bin"
+export PATH="${USER_HOME}/.local/bin:$PATH"
+if [ ! -x "${USER_HOME}/.dropbox-dist/dropboxd" ]; then
+    curl -fsSL "https://www.dropbox.com/download?plat=lnx.x86_64" | tar -xz -C "${USER_HOME}"
+fi
+curl -fsSL "https://www.dropbox.com/download?dl=packages/dropbox.py" -o "${USER_HOME}/.local/bin/dropbox"
+chmod +x "${USER_HOME}/.local/bin/dropbox"
+mkdir -p "${USER_HOME}/.config/systemd/user"
+cat << EOF > "${USER_HOME}/.config/systemd/user/dropbox.service"
+[Unit]
+Description=Dropbox daemon
+After=network-online.target
+
+[Service]
+ExecStart=${USER_HOME}/.dropbox-dist/dropboxd
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+EOF
+systemctl --user daemon-reload
+systemctl --user enable --now dropbox.service
+log "Dropbox is running. Complete account linking if prompted; inspect its log with: journalctl --user -u dropbox -f"
 
 # Install mitmproxy in an isolated environment, outside Debian's managed Python.
 log "Installing mitmproxy with pipx..."
@@ -553,6 +580,8 @@ cat << 'CHEAT'
 
 [Remote Access & System]
   remmina             - Feature-rich remote desktop client (RDP, VNC, SSH, SFTP)
+    dropbox             - Dropbox CLI (for example: dropbox status)
+    xfce4-indicator-plugin - Application indicators for the XFCE panel
   enable-gui          - Switch to graphical.target & start local display manager
   disable-gui         - Switch to multi-user.target (headless) & stop display manager
 ================================================================================
