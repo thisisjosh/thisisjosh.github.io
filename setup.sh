@@ -8,7 +8,7 @@
 #
 # Debian Headless Dev Setup Script (Complete Toolchain & Non-Interactive Setup)
 # Automatically configures XFCE, XRDP, VSCodium, NVM, Docker, Tailscale,
-# Cloudflare & GCloud CLIs, Encryption tools, OpenCV, System Monitoring, and Remmina.
+# Cloudflare & GCloud CLIs, Encryption tools, OpenCV, Flatpak apps, and Remmina.
 
 set -euo pipefail
 
@@ -95,6 +95,15 @@ if [ ! -s /usr/share/keyrings/microsoft-archive-keyring.gpg ]; then
 fi
 printf 'deb [arch=%s signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/repos/code stable main\n' \
     "$(dpkg --print-architecture)" | sudo tee /etc/apt/sources.list.d/vscode.list > /dev/null
+if [ "$(dpkg --print-architecture)" = "amd64" ]; then
+    log "Adding Google's Chrome repository..."
+    if [ ! -s /etc/apt/keyrings/google-chrome.gpg ]; then
+        curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | sudo tee /etc/apt/keyrings/google-chrome.gpg > /dev/null
+        sudo chmod a+r /etc/apt/keyrings/google-chrome.gpg
+    fi
+    echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main' \
+        | sudo tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
+fi
 sudo DEBIAN_FRONTEND=noninteractive apt update
 
 # 2. Install Core Dependencies, System Utilities, Monitoring, & Encryption
@@ -126,6 +135,7 @@ sudo DEBIAN_FRONTEND=noninteractive apt install -y \
     ntfs-3g \
     chromium \
     virt-manager \
+    flatpak \
     pipx \
     openssl \
     dracut \
@@ -160,6 +170,60 @@ sudo DEBIAN_FRONTEND=noninteractive apt install -y \
     tpm2-tools \
     qdirstat \
     remmina
+
+log "Installing Pinta from Flathub..."
+sudo flatpak remote-add --system --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+sudo flatpak install --system -y flathub com.github.PintaProject.Pinta
+
+log "Installing PhotoCraft from its latest official Debian release..."
+case "$(dpkg --print-architecture)" in
+    amd64) PHOTOCRAFT_ARCH_SUFFIX="linux-x86_64.deb" ;;
+    arm64) PHOTOCRAFT_ARCH_SUFFIX="linux-aarch64.deb" ;;
+    *)
+        PHOTOCRAFT_ARCH_SUFFIX=""
+        warn "PhotoCraft does not publish a Debian package for $(dpkg --print-architecture); skipping installation."
+        ;;
+esac
+if [ -n "$PHOTOCRAFT_ARCH_SUFFIX" ]; then
+    if ! PHOTOCRAFT_URL=$(curl -fsSL https://api.github.com/repos/storytold/photocraft/releases/latest |
+        jq -er --arg suffix "$PHOTOCRAFT_ARCH_SUFFIX" '.assets[] | select(.name | endswith($suffix)) | .browser_download_url'); then
+        err "Could not find the latest PhotoCraft Debian package for $(dpkg --print-architecture)."
+    fi
+    PHOTOCRAFT_DEB="$(mktemp --suffix=.deb)"
+    if ! curl -fsSL "$PHOTOCRAFT_URL" -o "$PHOTOCRAFT_DEB"; then
+        rm -f "$PHOTOCRAFT_DEB"
+        err "Failed to download the official PhotoCraft Debian package."
+    fi
+    if ! sudo DEBIAN_FRONTEND=noninteractive apt install -y "$PHOTOCRAFT_DEB"; then
+        rm -f "$PHOTOCRAFT_DEB"
+        err "Failed to install the official PhotoCraft Debian package."
+    fi
+    rm -f "$PHOTOCRAFT_DEB"
+fi
+
+PHOTOCRAFT_CONFIG_DIR="${XDG_CONFIG_HOME:-${USER_HOME}/.config}/photocraft"
+PHOTOCRAFT_PREFS="${PHOTOCRAFT_CONFIG_DIR}/preferences.json"
+mkdir -p "$PHOTOCRAFT_CONFIG_DIR"
+if [ ! -f "$PHOTOCRAFT_PREFS" ]; then
+    printf '{}\n' > "$PHOTOCRAFT_PREFS"
+fi
+if ! jq -e 'type == "object"' "$PHOTOCRAFT_PREFS" >/dev/null; then
+    err "PhotoCraft preferences at ${PHOTOCRAFT_PREFS} are not a JSON object; UI scaling was not changed."
+fi
+PHOTOCRAFT_PREFS_TMP="$(mktemp "${PHOTOCRAFT_CONFIG_DIR}/preferences.json.XXXXXX")"
+if ! jq '.interface = ((.interface | if type == "object" then . else {} end) + {"uiScale": "200"})' \
+    "$PHOTOCRAFT_PREFS" > "$PHOTOCRAFT_PREFS_TMP"; then
+    rm -f "$PHOTOCRAFT_PREFS_TMP"
+    err "Could not set PhotoCraft UI scaling to 200%."
+fi
+mv "$PHOTOCRAFT_PREFS_TMP" "$PHOTOCRAFT_PREFS"
+
+if [ "$(dpkg --print-architecture)" = "amd64" ]; then
+    log "Installing Google Chrome..."
+    sudo DEBIAN_FRONTEND=noninteractive apt install -y google-chrome-stable
+else
+    warn "Google Chrome is not available for $(dpkg --print-architecture); skipping installation."
+fi
 
 # Install Dropbox's official 64-bit Linux daemon and register it as a user service.
 log "Installing Dropbox daemon..."
@@ -276,6 +340,7 @@ cat << 'EOF' > "${USER_HOME}/.xsession"
 # HiDPI environment variables for GTK / Qt in RDP sessions
 export GDK_SCALE=2
 export GDK_DPI_SCALE=0.5
+export QT_SCALE_FACTOR=2
 export XCURSOR_SIZE=48
 
 # Background hook to enforce xfconf 2x scaling once xfsettingsd is running
@@ -295,6 +360,16 @@ exec xfce4-session
 EOF
 chmod +x "${USER_HOME}/.xsession"
 chown -R "${TARGET_USER}:${TARGET_USER}" "${USER_HOME}/.config/xfce4" "${USER_HOME}/.xsession" 2>/dev/null || true
+
+# XRDP's startwm.sh sources ~/.profile before starting XFCE directly, bypassing ~/.xsession.
+touch "${USER_HOME}/.profile"
+if ! grep -Fq '# HiDPI scaling for Qt apps (managed by setup.sh)' "${USER_HOME}/.profile"; then
+    cat << 'EOF' >> "${USER_HOME}/.profile"
+
+# HiDPI scaling for Qt apps (managed by setup.sh)
+export QT_SCALE_FACTOR=2
+EOF
+fi
 
 # If an active desktop display is present in the current session, apply 2x scaling immediately
 if [ -n "${DISPLAY:-}" ] && command -v xfconf-query >/dev/null 2>&1; then
@@ -577,6 +652,8 @@ cat << 'CHEAT'
   ffmpeg              - Command-line audio/video converter and video processor
   vlc                 - Cross-platform media player
   handbrake           - Multi-threaded GUI video converter and compressor
+  pinta               - Drawing and image editing app (installed from Flathub)
+  photocraft          - Native layered image editor (latest official Debian package)
 
 [Remote Access & System]
   remmina             - Feature-rich remote desktop client (RDP, VNC, SSH, SFTP)
