@@ -258,7 +258,6 @@ def verify(provisioner) -> list[Check]:
     add("Antigravity CLI installed", "command -v agy >/dev/null")
     add("Tailscale installed", "command -v tailscale >/dev/null")
     add("Fresh installed", "command -v fresh >/dev/null")
-    add("Kiri installed", "command -v kiri >/dev/null")
     add("no-more-secrets installed", "[ -x /usr/local/bin/nms ] && [ -x /usr/local/bin/sneakers ]")
 
     return checks

@@ -216,10 +216,10 @@ def verify(provisioner) -> list[Check]:
     add("GUI toggle commands installed", "[ -x /usr/local/bin/enable-gui ] && [ -x /usr/local/bin/disable-gui ]", user="root")
     add("cheat sheet is the media edition", "/usr/local/bin/h | grep -q 'MEDIA SERVER TOOLS CHEAT SHEET'", user="root")
     add(
-        "cheat sheet lists codium, vlc, uv, tailscale and fail2ban",
+        "cheat sheet lists codium, vlc, jellyfin, uv, tailscale and fail2ban",
         "/usr/local/bin/h | grep -q codium && /usr/local/bin/h | grep -q vlc && "
-        "/usr/local/bin/h | grep -q uv && /usr/local/bin/h | grep -q tailscale && "
-        "/usr/local/bin/h | grep -q fail2ban",
+        "/usr/local/bin/h | grep -q jellyfin && /usr/local/bin/h | grep -q uv && "
+        "/usr/local/bin/h | grep -q tailscale && /usr/local/bin/h | grep -q fail2ban",
         user="root",
     )
     add("user is in the dialout group", "id -nG | grep -qw dialout")
@@ -232,6 +232,10 @@ def verify(provisioner) -> list[Check]:
     add("Google Chrome installed", "google-chrome --version | grep -qi 'Google Chrome'")
     add("VSCodium installed", "command -v codium >/dev/null")
     add("VLC installed", "command -v vlc >/dev/null")
+    add("Jellyfin installed", "command -v jellyfin >/dev/null")
+    add("Jellyfin service is active", "systemctl is-active --quiet jellyfin", user="root")
+    add("Jellyfin starts on boot", "systemctl is-enabled --quiet jellyfin", user="root")
+    add("Jellyfin web UI listens on port 8096", "ss -ltn 'sport = :8096' | grep -q LISTEN", user="root")
     add("uv installed", "[ -x \"$HOME/.local/bin/uv\" ] && \"$HOME/.local/bin/uv\" --version >/dev/null")
     add("Tailscale installed", "command -v tailscale >/dev/null")
     add("Python venv module available", "python3 -m venv --help >/dev/null")
@@ -298,6 +302,7 @@ def main() -> int:
             second_code == 0
             and "All requested packages are already installed." in second_log
             and "VSCodium is already installed." in second_log
+            and "Jellyfin is already installed." in second_log
             and "Astral uv is already installed." in second_log
             and "Tailscale is already installed." in second_log
         )

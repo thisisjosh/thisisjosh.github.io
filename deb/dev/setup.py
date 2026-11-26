@@ -857,14 +857,6 @@ Categories=Development;IDE;
 """
 
 
-def install_kiri() -> None:
-    if command_exists("kiri"):
-        log("Kiri is already installed.")
-        return
-    log("Installing Kiri...")
-    run_remote_script("https://runkiri.com/install.sh")
-
-
 def install_fresh() -> None:
     if command_exists("fresh"):
         log("Fresh is already installed.")
@@ -1339,7 +1331,6 @@ cat << 'CHEAT'
 
 [Containerization & Cloud]
   docker / compose    - Container management platform and multi-container orchestrator
-  kiri                - Tiny, fast Docker-compatible container runtime
   tailscale           - Zero-config mesh VPN based on WireGuard
   gcloud              - Google Cloud Platform command-line interface
   cf                  - Cloudflare API command-line tool
@@ -1636,7 +1627,6 @@ def main() -> int:
         ("Tailscale", install_tailscale),
         ("Fresh", install_fresh),
         ("no-more-secrets", install_no_more_secrets),
-        ("Kiri", install_kiri),
         ("TPM 2.0", install_tpm_unlock),
     )
 

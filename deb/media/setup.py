@@ -5,8 +5,8 @@ setup.sh is only a bootstrap that installs Python 3 and runs this file. Every
 step below is idempotent, so the script can be re-run after installing new
 software. The installer preseed (deb/media/preseed.cfg) already installs XFCE,
 XRDP, SSH, fail2ban, VLC, Python and Arduino support; this script adds Chrome,
-VSCodium, uv and Tailscale and finishes the desktop, security and shell
-configuration.
+VSCodium, Jellyfin, uv and Tailscale and finishes the desktop, security and
+shell configuration.
 """
 
 from __future__ import annotations
@@ -199,7 +199,7 @@ class AptRepository:
     key_url: str
     keyring: Path
     source_path: Path
-    source_line: str
+    source_text: str
     architectures: tuple[str, ...] = ()
 
 
@@ -209,7 +209,7 @@ REPOSITORIES = (
         key_url="https://dl.google.com/linux/linux_signing_key.pub",
         keyring=ETC_KEYRINGS_DIR / "google-chrome.gpg",
         source_path=Path("/etc/apt/sources.list.d/google-chrome.list"),
-        source_line=(
+        source_text=(
             "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] "
             "https://dl.google.com/linux/chrome/deb/ stable main"
         ),
@@ -220,12 +220,29 @@ REPOSITORIES = (
         key_url="https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg",
         keyring=KEYRINGS_DIR / "vscodium-archive-keyring.gpg",
         source_path=Path("/etc/apt/sources.list.d/vscodium.list"),
-        source_line=(
+        source_text=(
             "deb [ signed-by=/usr/share/keyrings/vscodium-archive-keyring.gpg ] "
             "https://download.vscodium.com/debs vscodium main"
         ),
     ),
+    AptRepository(
+        name="Jellyfin",
+        key_url="https://repo.jellyfin.org/jellyfin_team.gpg.key",
+        keyring=ETC_KEYRINGS_DIR / "jellyfin.gpg",
+        source_path=Path("/etc/apt/sources.list.d/jellyfin.sources"),
+        source_text=(
+            "Types: deb\n"
+            "URIs: https://repo.jellyfin.org/debian\n"
+            "Suites: {suite}\n"
+            "Components: main\n"
+            "Architectures: {arch}\n"
+            "Signed-By: /etc/apt/keyrings/jellyfin.gpg"
+        ),
+        architectures=("amd64", "arm64"),
+    ),
 )
+
+JELLYFIN_ARCHITECTURES = ("amd64", "arm64")
 
 
 def _dearmor(key_data: bytes) -> bytes:
@@ -250,8 +267,8 @@ def ensure_repository(repository: AptRepository) -> bool:
         changed = True
     if not repository.source_path.exists():
         log(f"Adding the {repository.name} repository...")
-        source_line = repository.source_line.format(arch=ARCH, suite=SUITE)
-        write_root_file(repository.source_path, source_line + "\n")
+        source_text = repository.source_text.format(arch=ARCH, suite=SUITE)
+        write_root_file(repository.source_path, source_text.rstrip("\n") + "\n")
         changed = True
     return changed
 
@@ -353,6 +370,18 @@ def install_vscodium() -> None:
         return
     log("Installing VSCodium...")
     APT.install(["codium"])
+
+
+def install_jellyfin() -> None:
+    if ARCH not in JELLYFIN_ARCHITECTURES:
+        warn(f"Jellyfin is not available for {ARCH}; skipping.")
+        return
+    if package_installed("jellyfin"):
+        log("Jellyfin is already installed.")
+    else:
+        log("Installing Jellyfin...")
+        APT.install(["jellyfin"])
+    run(["systemctl", "enable", "--now", "jellyfin"], sudo=True)
 
 
 def install_uv() -> None:
@@ -498,6 +527,9 @@ cat << 'CHEAT'
 [Media]
   vlc                 - Media player (cvlc for the console)
   vlc --intf dummy    - Play or stream without opening a window
+  jellyfin            - Media server; browse and stream at http://localhost:8096
+  systemctl status jellyfin  - Show whether the Jellyfin server is running
+  journalctl -u jellyfin     - Read the Jellyfin server log
 
 [Python]
   python3 / pip3      - Python 3 interpreter and standard package manager
@@ -566,6 +598,7 @@ def main() -> int:
         ("system packages", install_system_packages),
         ("Google Chrome", install_chrome),
         ("VSCodium", install_vscodium),
+        ("Jellyfin", install_jellyfin),
         ("XRDP desktop", configure_xrdp),
         ("fail2ban SSH protection", configure_fail2ban),
         ("GUI toggles", install_gui_toggles),
